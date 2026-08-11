@@ -1,0 +1,9 @@
+build/bin
+node_modules
+frontend/dist
+*.log
+debug.log
+
+# Dev-Screenshots im Projektstamm; die verwendeten liegen unter docs/
+/[0-9]*.png
+/Screenshot*.png

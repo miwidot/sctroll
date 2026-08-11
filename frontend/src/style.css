@@ -1,0 +1,156 @@
+/* Schriften lokal eingebettet -- die App muss auch ohne Netz richtig aussehen. */
+@font-face { font-family: 'Chakra Petch'; font-style: normal; font-weight: 400; font-display: block; src: url('./assets/fonts/ChakraPetch-400.woff2') format('woff2'); }
+@font-face { font-family: 'Chakra Petch'; font-style: normal; font-weight: 500; font-display: block; src: url('./assets/fonts/ChakraPetch-500.woff2') format('woff2'); }
+@font-face { font-family: 'Chakra Petch'; font-style: normal; font-weight: 600; font-display: block; src: url('./assets/fonts/ChakraPetch-600.woff2') format('woff2'); }
+@font-face { font-family: 'Chakra Petch'; font-style: normal; font-weight: 700; font-display: block; src: url('./assets/fonts/ChakraPetch-700.woff2') format('woff2'); }
+/* Sora ist ein Variable Font -- eine Datei deckt den ganzen Gewichtsbereich ab. */
+@font-face { font-family: 'Sora'; font-style: normal; font-weight: 100 800; font-display: block; src: url('./assets/fonts/Sora.woff2') format('woff2'); }
+@font-face { font-family: 'Space Mono'; font-style: normal; font-weight: 400; font-display: block; src: url('./assets/fonts/SpaceMono-400.woff2') format('woff2'); }
+
+:root {
+  /* Farbwerte von citizenhq.space uebernommen. */
+  --space-900: #071015;
+  --space-800: #0a171d;
+  --space-700: #102129;
+  --space-600: #182d35;
+
+  --brand: #d75c57;
+  --brand-bright: #e47a75;
+  --data: #7cc5d1;
+  --data-bright: #b5dde3;
+  --data-dim: #315d65;
+  --attention: #d6a34a;
+  --attention-bright: #ebc36b;
+  --alert: #ef5454;
+  --alert-bright: #ff7373;
+  --up: #72ba91;
+
+  --ink: #dce6e8;
+  --ink-soft: #a9bbc1;
+  --ink-faint: #879ba3;
+  --line: #9ebfc838;
+  --line-strong: #9ebfc86b;
+
+  --font-display: 'Chakra Petch', 'Segoe UI', sans-serif;
+  --font-body: 'Sora', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'Space Mono', 'Consolas', monospace;
+
+  /* Auf die Namen gemappt, die die Komponenten schon benutzen. */
+  --bg-primary: var(--space-900);
+  --bg-secondary: var(--space-800);
+  --bg-card: var(--space-700);
+  --bg-card-hover: var(--space-600);
+  --bg-input: #050d11;
+  --border: var(--line);
+  --border-hover: var(--line-strong);
+  --border-glow: rgba(124, 197, 209, 0.30);
+
+  --text-primary: var(--ink);
+  --text-secondary: var(--ink-soft);
+  --text-muted: var(--ink-faint);
+
+  --accent: var(--data);
+  --accent-hover: var(--data-bright);
+  --accent-dim: rgba(124, 197, 209, 0.12);
+  --accent-glow: rgba(124, 197, 209, 0.28);
+
+  --danger: var(--alert);
+  --danger-dim: rgba(239, 84, 84, 0.12);
+  --success: var(--up);
+  --success-dim: rgba(114, 186, 145, 0.14);
+  --warning: var(--attention);
+
+  /* Alte Namen aus der Tarkov-Variante, damit nichts ins Leere zeigt. */
+  --neon-green: var(--data);
+  --brand-green: var(--data);
+
+  /* Kantiges Raster statt runder Ecken -- Radien bleiben minimal. */
+  --radius: 2px;
+  --radius-sm: 2px;
+  --radius-lg: 3px;
+
+  --ease-out-quint: cubic-bezier(.23, 1, .32, 1);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 14px;
+  height: 100vh;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Ueberschriften und Steuerelemente in der Display-Schrift, weit gesperrt --
+   das ist der Charakter, der die Oberflaeche nach HUD aussehen laesst. */
+h1, h2, h3, h4, button, .label, th {
+  font-family: var(--font-display);
+  letter-spacing: 0.08em;
+}
+
+h2, h3 {
+  text-transform: uppercase;
+}
+
+code, pre, .mono {
+  font-family: var(--font-mono);
+}
+
+#app {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background:
+    radial-gradient(1200px 600px at 78% -10%, rgba(49, 93, 101, 0.22), transparent 70%),
+    var(--bg-primary);
+}
+
+/* Abgeschraegte Ecke, wie auf citizenhq.space. Diagonale Kante bleibt ohne
+   Kontur -- die Flaeche selbst traegt die Form. */
+.chamfer {
+  --chamfer: 10px;
+  clip-path: polygon(
+    var(--chamfer) 0, 100% 0,
+    100% calc(100% - var(--chamfer)), calc(100% - var(--chamfer)) 100%,
+    0 100%, 0 var(--chamfer)
+  );
+}
+
+.chamfer-sm { --chamfer: 6px; }
+
+/* Gesperrte Grossbuchstaben fuer Kleinkram wie Statuszeilen. */
+.hud-label {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--space-900);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--data-dim);
+  border-radius: 0;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--data);
+}
+
+::selection {
+  background: rgba(124, 197, 209, 0.28);
+  color: var(--ink);
+}

@@ -1,0 +1,171 @@
+# Changelog
+
+## 1.0.6
+
+Die Anmeldung hielt nicht, weil der Token-Refresh bei **jedem** Fehler die gespeicherten
+Zugangsdaten gelöscht hat. `RefreshAccessToken` prüfte den HTTP-Status nicht: kam von Twitch
+eine Fehlerantwort — abgelaufener Token, HTTP 500, Rate Limit oder nur ein kurzer Netzausfall
+beim Systemstart — waren `access_token` und `refresh_token` in der Antwort leer, wurden **so
+gespeichert**, und die Funktion meldete Erfolg. Danach war der Refresh Token endgültig weg.
+
+- **Fehler löschen keine Anmeldung mehr.** Nur HTTP 400/401 gelten als endgültige Ablehnung
+  (`ErrLoginRequired`); alles andere ist vorübergehend und lässt die Zugangsdaten stehen.
+- **Refresh-Token-Rotation korrekt behandelt.** Liefert Twitch keinen neuen mit, gilt der alte
+  weiter, statt überschrieben zu werden.
+- **Ablaufzeitpunkt wird gespeichert** (`expires_in` wurde bisher weggeworfen) und der Token
+  15 Minuten vorher im Hintergrund erneuert. Vorher fiel ein Ablauf erst auf, wenn mitten im
+  Stream keine Einlösung mehr ankam — die EventSub-Verbindung meldet keinen 401, sie wird
+  still widerrufen.
+- **Auto-Login hängt am Refresh Token**, nicht mehr am Access Token. Der ist nach ein paar
+  Stunden ohnehin abgelaufen; die Prüfung `AccessToken != ""` hat den Auto-Login danach gar
+  nicht erst versucht.
+- **Wiederholversuche beim Start** (0/3/10/30/60 s). Beim Systemstart ist das Netz oft noch
+  nicht da — das war bisher sofort ein Fehlschlag.
+- **EventSub-Anmeldung läuft über `doAuthorized`.** Sie baute ihre Anfrage selbst und ging an
+  der Token-Erneuerung vorbei; ein abgelaufener Token liess den ganzen Verbindungsaufbau
+  scheitern.
+- `Disconnect` beendet die Hintergrund-Erneuerung sauber, erneutes Verbinden legt einen
+  frischen Client an.
+
+Acht neue Tests gegen einen Stub-Server decken die Token-Behandlung ab, darunter der
+ursprüngliche Fehler: HTTP 500 darf die Zugangsdaten nicht anfassen.
+
+## 1.0.5
+
+Behebt einen Fehler, den 1.0.4 selbst eingebaut hat: die Umstellung auf Star Citizens echte
+Standardbelegungen hat auch die Tasten von Aktionen überschrieben, die im Spiel **ab Werk
+unbelegt** sind — Emotes und Türen. Deren Auslieferungswert ist leer, und damit hat die
+Migration bereits aus dem Spielprofil übernommene Belegungen gelöscht.
+
+- **Migration leert keine Tasten mehr.** Ist der Auslieferungswert leer, bleibt eine
+  vorhandene Belegung stehen.
+- **Fehlende Tasten werden beim Start aus dem Spielprofil ergänzt.** Betrifft genau die
+  Aktionen ohne Standardbelegung. Bereits gesetzte Tasten bleiben unangetastet; der
+  vollständige Abgleich läuft weiter nur über den Knopf in den Einstellungen.
+- **Die Bindliste zeigt jetzt alle Aktionen**, nicht nur die aktiven. Emotes und Türen sind
+  ab Werk abgeschaltet und waren dadurch in der Liste unsichtbar — ausgerechnet die, deren
+  Belegung man nachsehen will. Abgeschaltete Zeilen sind ausgegraut.
+
+Drei neue Tests sichern das ab: die Migration darf keine Taste leeren, umbenannte Aktionen
+müssen ihre Reward-ID mitnehmen, und die Emote-Belegungen müssen aus dem Profil ankommen.
+
+## 1.0.4
+
+Ein Abgleich aller mitgelieferten Aktionen gegen die Standardbelegung hat fünf gefunden, die
+im Spiel ins Leere zeigten — teils weil Star Citizen sie umgebaut hat, teils weil sie ab Werk
+nie eine Taste hatten.
+
+- **Quantum-Modus ersetzt durch Master Mode.** Seit den Master Modes ist
+  `v_toggle_quantum_mode` unbelegte Altlast. Der Moduswechsel läuft über
+  `v_master_mode_cycle_long` — Taste `b`, `activationMode="delayed_press"`, also **langer
+  Druck**. Neue Haltezeit 500 ms.
+- **Energie:** `v_power_set_off` ist unbelegt, richtig ist `v_power_toggle` auf `u`. Dazu neu
+  Schilde (`o`) und Waffen (`p`), die es vorher gar nicht gab.
+- **Decoy ist eine Halteaktion** (`onHold="1"`). Mit den bisherigen 80 ms wäre auch mit
+  korrekter Taste nichts passiert — jetzt 800 ms.
+- **Nachtsicht und Speed Limiter entfernt.** `v_light_amplification_toggle` steht so nicht
+  mehr im Standardprofil, `v_ifcs_speed_limiter_toggle` ist ab Werk unbelegt.
+- **Alle Tasten auf die echten Standardbelegungen umgestellt.** Vorher standen dort erfundene
+  RAlt-Kombinationen. Licht `l`, Fahrwerk `n`, VTOL `k`, Decoupled `c`, Scan `v`,
+  Umschauen `comma`, Taschenlampe `t`, Boost `lshift`, Aufstehen `y`.
+- **Ab Werk unbelegte Aktionen** (Türen, Türschlösser, G-Comp, alle Emotes) werden ohne Taste
+  ausgeliefert und sind aus. Sie zeigen in der Liste *unbelegt*; wer sie im Spiel gebunden hat,
+  holt sie mit *Aus dem Spiel übernehmen*.
+- **Einmalige Migration** beim ersten Start: Tasten werden auf die Standardwerte gesetzt,
+  umbenannte Aktionen ziehen samt Reward-ID um. Eigene Belegungen holt der Abgleich zurück.
+
+Zwei neue Tests hätten das verhindert und laufen ab jetzt bei jedem Build: jede Aktion muss in
+der `defaultProfile.xml` existieren, und ihre Haltezeit muss zum `activationMode` passen.
+
+## 1.0.3
+
+Star Citizens komplette Standardbelegung liegt jetzt bei. Damit kennt SCTroll auch die Tasten
+von Aktionen, die nicht in der `actionmaps.xml` stehen — und das sind die allermeisten, weil
+die Datei nur Abweichungen enthält.
+
+- **`defaultProfile.xml` eingebettet** (1097 Aktionen, 50 Actionmaps). Die Datei steckt im
+  Spiel in der `Data.p4k`; die beiliegende Kopie stammt aus
+  [ltmajor42/StarCitizen_Streamdeck_Plugin](https://github.com/ltmajor42/StarCitizen_Streamdeck_Plugin),
+  das sie aus der p4k entpackt. Eine eigene Datei unter `%APPDATA%\SCTroll\defaultProfile.xml`
+  hat Vorrang — so lässt sich nach einem Patch aktualisieren, ohne neu zu bauen.
+- **Tastenauflösung in zwei Stufen**: eigene Belegung aus der `actionmaps.xml`, sonst
+  Standardbelegung. Aktionen ohne jede Belegung werden als *unbelegt* geführt statt still
+  eine erfundene Taste zu drücken. Türen und Emotes sind ab Werk unbelegt — deshalb hat sie
+  jeder selbst gebunden.
+- **Haltezeiten aus `activationMode`.** Das Standardprofil sagt pro Aktion, ob getippt,
+  gedrückt oder gehalten werden muss. `pl_exit` (aus dem Sitz) ist `onHold`, `v_self_destruct`
+  ist `delayed_press_medium` — mit 80 ms passiert da nichts. Beim Abgleich wird die Haltezeit
+  nur verlängert, nie verkürzt.
+- Die Bindliste unterscheidet jetzt *Eigene* / *Standard* / *unbelegt*.
+
+Korrigierte Standardbelegungen, die vorher geraten waren: Licht `l`, Fahrwerk `n`,
+Flight Ready `ralt+r`, Helm `lalt+h`, Schleudersitz `ralt+y`, Selbstzerstörung `backspace`,
+Aus dem Sitz `y`, Decoupled `c`.
+
+## 1.0.2
+
+Bis hierhin gab es keine Möglichkeit, einen Tastendruck auszulösen, ohne dass ein Zuschauer
+einen Reward einlöst. Damit ließ sich auch nicht feststellen, ob überhaupt etwas beim Spiel
+ankommt — im Debug-Log stand entsprechend keine einzige `sendKey`-Zeile.
+
+- **Test-Knopf pro Aktion.** 5 Sekunden Vorlauf zum Wechseln ins Spiel, dann wird die Taste
+  gedrückt. Ohne Twitch, ohne Cooldown, aber mit Vordergrundprüfung. Das Debug-Log zeigt
+  danach pro Tastendruck `ok` oder `BLOCKIERT`.
+- **Sendeverfahren umschaltbar**: Scancode (bisher fest verdrahtet), Virtual-Key oder beides.
+  Der bisherige Scancode-Zwang (`Vk=0`) stammte aus der Tarkov-Vorlage und war für Star Citizen
+  nie geprüft. Das Stream-Deck-Plugin für Star Citizen benutzt InputSimulator, also
+  Virtual-Keys — Software-Injection funktioniert dort nachweislich.
+- Log-Ausgabe pro Tastendruck nennt jetzt das benutzte Verfahren.
+
+## 1.0.1
+
+**Korrektur eines Denkfehlers in 1.0.0.** SCTroll hat eigene `ralt+…`-Belegungen in die
+`actionmaps.xml` geschrieben. Das war falsch: die Datei enthält nur Abweichungen vom Standard,
+ein Eintrag *überschreibt* also Star Citizens Standardtaste. Bei Aktionen, die vorher auf der
+Standardtaste liefen, hat SCTroll damit genau die weggenommen — die gewohnte Taste tat nichts
+mehr. Die Annahme dahinter ("wer per Joystick bindet, hat keine Tastaturbelegung mehr") stimmt
+nicht: beide Belegungen existieren nebeneinander.
+
+- **Es wird nicht mehr geschrieben.** `WriteSCBinds` ist raus.
+- **Neu: Aus dem Spiel übernehmen** (`ImportSCBinds`) — liest alle `kb1_`-Belegungen aus der
+  `actionmaps.xml` und setzt sie als Tasten der Aktionen.
+- **Neu: Von sctroll gesetzte Belegungen entfernen** (`RemoveSCBinds`) — nimmt die von 1.0.0
+  geschriebenen Einträge zurück, sodass die Standardbelegung wieder greift. Entfernt nur, was
+  exakt einer mitgelieferten SCTroll-Taste entspricht; eigene Belegungen bleiben.
+- Die Bindliste zeigt jetzt pro Aktion die Herkunft der Taste (*Profil* / *Standard*) und
+  markiert Abweichungen zwischen Aktion und Profil rot.
+
+## 1.0.0
+
+Erste Version. Portiert von [tarkovtroll](https://github.com/miwidot/tarkovtroll) auf Star Citizen.
+
+### Neu
+
+- **Installationssuche** über RSI-Launcher-Log, alle lokalen Festplatten und manuelle Auswahl.
+  Das Spiel muss nicht auf `C:` liegen.
+- **`actionmaps.xml` schreiben statt lesen**: SCTroll trägt seine eigenen Tastenbelegungen ins
+  Spielprofil ein. Joystick-, HOTAS- und Gamepad-Belegungen bleiben erhalten, vorher wird eine
+  Sicherung mit Zeitstempel angelegt. Geblockt, solange das Spiel läuft — Star Citizen würde
+  die Änderungen beim Beenden sonst überschreiben.
+- **30 Star-Citizen-Aktionen** in den Kategorien Schiff, Flug, Energie, Sicht, Spieler, Emotes
+  und Gefährlich.
+- **Erstattung von Kanalpunkten**, wenn eine Aktion nicht ausgeführt werden konnte (Spiel nicht
+  im Vordergrund, Cooldown, Aktion deaktiviert, Queue voll).
+
+### Geändert gegenüber tarkovtroll
+
+- **Kein Client Secret mehr.** Der Device Code Flow ist für öffentliche Clients gedacht, auch
+  der Token-Refresh kommt ohne aus. Ein Secret in einer ausgelieferten Desktop-App ist keins.
+- **Reconnect**: `session_reconnect` wurde bisher nur geloggt. Jetzt wird die neue Session-URL
+  übernommen, ohne die Subscriptions doppelt anzulegen. Dazu eine Read-Deadline anhand des
+  Keepalive-Intervalls, damit tote Verbindungen überhaupt auffallen.
+- **Reward-Anlage**: `should_redemptions_skip_queue` war ein Feldname, den Twitch nicht kennt.
+  Korrekt ist `should_redemptions_skip_request_queue` — und er muss `false` sein, sonst gilt eine
+  Einlösung sofort als erledigt und lässt sich nicht mehr erstatten.
+- **Key Lock** ohne Tarkov-Sonderfall: die Zwangsfreigabe von Shift/Strg/WASD vor Waffenaktionen
+  gab es nur, weil Tarkov beim Sprinten die Waffe senkt. Jetzt zählt nur die Konfiguration
+  pro Aktion.
+- **Tastennamen** folgen der `actionmaps.xml`-Schreibweise (`np_5`, `lbracket`, `ralt`, …), damit
+  Spielprofil und Konfiguration dieselbe Sprache sprechen. Ziffernblock, Satzzeichen und die
+  rechten Modifier sind neu dazugekommen.
+- **F13–F24 bewusst nicht unterstützt**: Star Citizen kann sie nicht binden.
