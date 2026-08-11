@@ -7,3 +7,5 @@ debug.log
 # Dev-Screenshots im Projektstamm; die verwendeten liegen unter docs/
 /[0-9]*.png
 /Screenshot*.png
+
+release/
