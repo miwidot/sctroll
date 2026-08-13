@@ -7,7 +7,31 @@ Schleudersitz.
 Windows-Desktop-App in Go ([Wails](https://wails.io) + Svelte). Kein Overlay, kein Browser,
 keine Änderung am Spiel.
 
+[![Release](https://img.shields.io/github/v/release/miwidot/sctroll?label=Download&color=7cc5d1)](https://github.com/miwidot/sctroll/releases/latest)
+[![Lizenz](https://img.shields.io/github/license/miwidot/sctroll?color=7cc5d1)](LICENSE)
+
 ![Aktionen](docs/actions.png)
+
+---
+
+## Herunterladen
+
+**[Neueste Version herunterladen](https://github.com/miwidot/sctroll/releases/latest)** —
+eine einzelne signierte `.exe`, keine Installation nötig.
+
+Die Programmdatei ist mit einem Certum-Zertifikat signiert und zeitgestempelt, Windows meldet
+also keinen unbekannten Herausgeber. Prüfen lässt sich das jederzeit selbst:
+
+```powershell
+Get-AuthenticodeSignature .\SCTroll-*-windows-amd64.exe | Format-List Status, SignerCertificate
+Get-FileHash .\SCTroll-*-windows-amd64.exe -Algorithm SHA256
+```
+
+Zu jeder Version liegt die SHA256-Prüfsumme als eigene Datei bei. Neue Versionen meldet
+SCTroll ab 1.0.7 selbst, siehe [Updates](#updates).
+
+**Voraussetzungen:** Windows 10/11 · Star Citizen einmal gestartet · Twitch Affiliate oder
+Partner (nur dann gibt es Kanalpunkte)
 
 ---
 
@@ -17,6 +41,7 @@ keine Änderung am Spiel.
 - [Der schwierige Teil: die Tastenbelegungen](#der-schwierige-teil-die-tastenbelegungen)
 - [Einrichtung](#einrichtung)
 - [Aktionen](#aktionen)
+- [Updates](#updates)
 - [Sicherheitsnetze](#sicherheitsnetze)
 - [Wenn nichts passiert](#wenn-nichts-passiert)
 - [Twitch-Anbindung](#twitch-anbindung)
@@ -136,8 +161,12 @@ sendet, fällt hier also weg.
 4. Bei Aktionen, die als *unbelegt* geführt werden: im Spiel binden, dann
    *Einstellungen → Aus dem Spiel übernehmen*.
 5. **Twitch verbinden.** Der Browser öffnet sich mit einem Code, den du auf der Twitch-Seite
-   bestätigst. Die Rewards werden danach automatisch auf deinem Kanal angelegt.
+   bestätigst. Die Rewards werden danach automatisch auf deinem Kanal angelegt — von Hand
+   ist nichts einzurichten.
 6. Bei einer Aktion auf **Test** drücken, ins Spiel wechseln — kommt die Taste an?
+
+Die Anmeldung hält über Neustarts: der Zugangstoken wird im Hintergrund erneuert, bevor er
+abläuft. Nur wenn du den Zugriff auf Twitch-Seite widerrufst, ist eine neue Anmeldung fällig.
 
 ![Twitch](docs/twitch.png)
 
