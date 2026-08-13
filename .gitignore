@@ -9,3 +9,6 @@ debug.log
 /Screenshot*.png
 
 release/
+
+# Werbetexte bleiben lokal
+docs/WERBETEXT.md
