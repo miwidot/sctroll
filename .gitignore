@@ -10,5 +10,6 @@ debug.log
 
 release/
 
-# Werbetexte bleiben lokal
+# Werbe- und Ankündigungstexte bleiben lokal
 docs/WERBETEXT.md
+docs/ANKUENDIGUNG.md
