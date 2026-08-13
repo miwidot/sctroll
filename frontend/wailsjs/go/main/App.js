@@ -74,6 +74,10 @@ export function GetSCInstalls() {
   return window['go']['main']['App']['GetSCInstalls']();
 }
 
+export function GetTwitchApp() {
+  return window['go']['main']['App']['GetTwitchApp']();
+}
+
 export function GetTwitchChannel() {
   return window['go']['main']['App']['GetTwitchChannel']();
 }
@@ -112,6 +116,10 @@ export function SetSCDir(arg1) {
 
 export function SetTargetWindow(arg1) {
   return window['go']['main']['App']['SetTargetWindow'](arg1);
+}
+
+export function SetTwitchApp(arg1, arg2) {
+  return window['go']['main']['App']['SetTwitchApp'](arg1, arg2);
 }
 
 export function StartTwitchAuth() {

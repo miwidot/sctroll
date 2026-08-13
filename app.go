@@ -381,6 +381,68 @@ func (a *App) GetTwitchChannel() string {
 	return a.cfg.Twitch.ChannelName
 }
 
+// TwitchApp beschreibt die verwendete Twitch-Anwendung fuer die Oberflaeche.
+// Das Secret wird nur als "gesetzt/nicht gesetzt" gemeldet, nicht im Klartext.
+type TwitchApp struct {
+	ClientID  string `json:"client_id"`
+	HasSecret bool   `json:"has_secret"`
+	IsDefault bool   `json:"is_default"`
+}
+
+func (a *App) GetTwitchApp() TwitchApp {
+	return TwitchApp{
+		ClientID:  a.cfg.Twitch.ClientID,
+		HasSecret: a.cfg.Twitch.ClientSecret != "",
+		IsDefault: a.cfg.Twitch.ClientID == twitch.DefaultClientID,
+	}
+}
+
+// SetTwitchApp hinterlegt eine eigene Twitch-Anwendung.
+//
+// Ein Wechsel der Client-ID macht die bisherige Anmeldung ungueltig -- Tokens
+// gehoeren immer zu genau einer App. Rewards, die unter der alten ID angelegt
+// wurden, lassen sich danach ausserdem nicht mehr verwalten und muessen neu
+// erstellt werden.
+func (a *App) SetTwitchApp(clientID, clientSecret string) error {
+	clientID = strings.TrimSpace(clientID)
+	clientSecret = strings.TrimSpace(clientSecret)
+
+	if clientID == "" {
+		clientID = twitch.DefaultClientID
+	}
+
+	changedApp := clientID != a.cfg.Twitch.ClientID
+	if changedApp {
+		debuglog.Log("SetTwitchApp: Client-ID gewechselt — Anmeldung wird zurückgesetzt")
+		a.cfg.Twitch.AccessToken = ""
+		a.cfg.Twitch.RefreshToken = ""
+		a.cfg.Twitch.ExpiresAt = time.Time{}
+		for _, act := range a.cfg.GetActions() {
+			if act.RewardID != "" {
+				act.RewardID = ""
+				a.cfg.SetAction(act)
+			}
+		}
+		if a.twClient != nil {
+			a.twClient.Disconnect()
+			a.twClient = nil
+		}
+		runtime.EventsEmit(a.ctx, "twitch-disconnected", "App gewechselt")
+	}
+
+	a.cfg.Twitch.ClientID = clientID
+	a.cfg.Twitch.ClientSecret = clientSecret
+
+	if err := a.cfg.Save(); err != nil {
+		return err
+	}
+	runtime.EventsEmit(a.ctx, "twitch-log", map[bool]string{
+		true:  "Twitch-App gewechselt — bitte neu verbinden",
+		false: "Twitch-App aktualisiert",
+	}[changedApp])
+	return nil
+}
+
 // autoConnect stellt die Anmeldung beim Start wieder her.
 //
 // Es wird so lange erneut versucht, wie der Fehler voruebergehend sein kann --
@@ -405,6 +467,16 @@ func (a *App) autoConnect() {
 			runtime.EventsEmit(a.ctx, "twitch-authenticated", a.cfg.Twitch.ChannelName)
 			runtime.EventsEmit(a.ctx, "twitch-log",
 				fmt.Sprintf("Angemeldet als %s", a.cfg.Twitch.ChannelName))
+			return
+		}
+
+		// Falsch registrierte App: erneutes Versuchen bringt nichts, eine
+		// Neuanmeldung genauso wenig. Das muss der Nutzer einmal einrichten.
+		if errors.Is(err, twitch.ErrClientSecretRequired) {
+			debuglog.Log("autoConnect: %s", err)
+			runtime.EventsEmit(a.ctx, "twitch-log", err.Error())
+			runtime.EventsEmit(a.ctx, "twitch-needs-secret", err.Error())
+			runtime.EventsEmit(a.ctx, "twitch-disconnected", "App-Einrichtung unvollständig")
 			return
 		}
 
@@ -456,7 +528,14 @@ func (a *App) reconnectLoop() {
 		}
 
 		if err := a.twClient.Connect(); err != nil {
-			// Bei abgelaufener Anmeldung hilft kein weiterer Versuch.
+			// Bei abgelaufener Anmeldung oder falsch registrierter App hilft
+			// kein weiterer Versuch.
+			if errors.Is(err, twitch.ErrClientSecretRequired) {
+				runtime.EventsEmit(a.ctx, "twitch-log", err.Error())
+				runtime.EventsEmit(a.ctx, "twitch-needs-secret", err.Error())
+				runtime.EventsEmit(a.ctx, "twitch-disconnected", "App-Einrichtung unvollständig")
+				return
+			}
 			if errors.Is(err, twitch.ErrLoginRequired) {
 				runtime.EventsEmit(a.ctx, "twitch-log", err.Error())
 				runtime.EventsEmit(a.ctx, "twitch-disconnected", "Anmeldung abgelaufen")

@@ -61,7 +61,18 @@ type Action struct {
 }
 
 type TwitchConfig struct {
-	ClientID     string `json:"client_id"`
+	ClientID string `json:"client_id"`
+
+	// ClientSecret ist nur noetig, wenn die Twitch-App als "Confidential"
+	// registriert ist. Solche Apps lehnen den Token-Refresh ohne Secret ab
+	// ("missing client secret"), obwohl die Anmeldung selbst ohne funktioniert.
+	//
+	// Wird bewusst NICHT mitgeliefert: ein Secret in einer verteilten App waere
+	// keins. Der saubere Weg ist eine App vom Typ "Public" -- die kann ohne
+	// Secret erneuern. Dieses Feld ist fuer alle, die eine bestehende
+	// Confidential-App weiterbenutzen wollen.
+	ClientSecret string `json:"client_secret,omitempty"`
+
 	AccessToken  string `json:"access_token,omitempty"`
 	RefreshToken string `json:"refresh_token,omitempty"`
 

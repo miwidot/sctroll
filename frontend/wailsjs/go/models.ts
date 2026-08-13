@@ -107,6 +107,7 @@ export namespace config {
 	
 	export class TwitchConfig {
 	    client_id: string;
+	    client_secret?: string;
 	    access_token?: string;
 	    refresh_token?: string;
 	    // Go type: time
@@ -121,6 +122,7 @@ export namespace config {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.client_id = source["client_id"];
+	        this.client_secret = source["client_secret"];
 	        this.access_token = source["access_token"];
 	        this.refresh_token = source["refresh_token"];
 	        this.expires_at = this.convertValues(source["expires_at"], null);
@@ -236,6 +238,22 @@ export namespace main {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.user_code = source["user_code"];
 	        this.verification_uri = source["verification_uri"];
+	    }
+	}
+	export class TwitchApp {
+	    client_id: string;
+	    has_secret: boolean;
+	    is_default: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new TwitchApp(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.client_id = source["client_id"];
+	        this.has_secret = source["has_secret"];
+	        this.is_default = source["is_default"];
 	    }
 	}
 

@@ -720,6 +720,16 @@ func (c *Client) doAuthorized(buildReq func() (*http.Request, error)) (*http.Res
 // abgelehnt. Nur dann muss sich der Nutzer neu anmelden.
 var ErrLoginRequired = errors.New("Twitch-Anmeldung abgelaufen — bitte neu verbinden")
 
+// ErrClientSecretRequired heisst: die Twitch-App ist als "Confidential"
+// registriert und verlangt beim Erneuern ein Client Secret.
+//
+// Das ist kein abgelaufener Token, sondern ein Einrichtungsproblem -- der
+// Refresh Token ist voellig in Ordnung. Eine Neuanmeldung hilft nur bis zum
+// naechsten Ablauf und faellt dann wieder auf die Nase.
+var ErrClientSecretRequired = errors.New(
+	"Twitch-App verlangt ein Client Secret zum Erneuern. Entweder den Client Type der App " +
+		"auf \"Public\" stellen (dev.twitch.tv/console/apps) oder das Secret im Twitch-Tab hinterlegen")
+
 // refreshSkew ist der Vorlauf, mit dem erneuert wird. Ein Token, der in fuenf
 // Minuten ablaeuft, ueberlebt keine laengere Aktion mehr.
 const refreshSkew = 15 * time.Minute
@@ -734,19 +744,25 @@ const refreshSkew = 15 * time.Minute
 func (c *Client) RefreshAccessToken() error {
 	c.mu.RLock()
 	refreshToken := c.cfg.RefreshToken
+	secret := c.cfg.ClientSecret
 	c.mu.RUnlock()
 
 	if refreshToken == "" {
 		return ErrLoginRequired
 	}
 
-	// Kein client_secret: fuer Tokens aus dem Device Code Flow ist es optional,
-	// und ein mitgeliefertes Secret waere ohnehin oeffentlich.
-	resp, err := c.httpClient.PostForm(twitchTokenURL, url.Values{
+	form := url.Values{
 		"client_id":     {c.clientID},
 		"grant_type":    {"refresh_token"},
 		"refresh_token": {refreshToken},
-	})
+	}
+	// Nur mitschicken, wenn hinterlegt. Apps vom Typ "Public" brauchen keins;
+	// "Confidential"-Apps lehnen ohne ab.
+	if secret != "" {
+		form.Set("client_secret", secret)
+	}
+
+	resp, err := c.httpClient.PostForm(twitchTokenURL, form)
 	if err != nil {
 		return fmt.Errorf("Token-Refresh nicht erreichbar: %w", err)
 	}
@@ -756,6 +772,14 @@ func (c *Client) RefreshAccessToken() error {
 
 	if resp.StatusCode != 200 {
 		debuglog.Log("RefreshAccessToken: status=%d body=%s", resp.StatusCode, string(body))
+
+		// Fehlendes Secret ist kein abgelaufener Token, sondern eine falsch
+		// registrierte App. Eine Neuanmeldung wuerde das Problem nur bis zum
+		// naechsten Ablauf verdecken.
+		if strings.Contains(strings.ToLower(string(body)), "client secret") {
+			return ErrClientSecretRequired
+		}
+
 		// 400/401 heisst: der Refresh Token gilt nicht mehr. Alles andere
 		// (429, 5xx, Wartungsfenster) ist voruebergehend -- dann bleibt die
 		// Anmeldung stehen und der naechste Versuch klappt wieder.

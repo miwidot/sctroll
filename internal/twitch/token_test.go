@@ -104,6 +104,74 @@ func TestRefreshRotatesRefreshToken(t *testing.T) {
 	}
 }
 
+// Eine als "Confidential" registrierte Twitch-App lehnt den Refresh ohne Secret
+// ab. Das ist ein Einrichtungsproblem, keine abgelaufene Anmeldung -- wer es als
+// Ablauf behandelt, schickt den Nutzer in eine Endlosschleife aus Neuanmeldungen,
+// die jeweils nur bis zum naechsten Ablauf halten.
+func TestRefreshReportsMissingClientSecret(t *testing.T) {
+	stubToken(t, 400, `{"status":400,"message":"missing client secret"}`)
+
+	cfg := &config.TwitchConfig{AccessToken: "a", RefreshToken: "r"}
+	err := testClient(cfg).RefreshAccessToken()
+
+	if !errors.Is(err, ErrClientSecretRequired) {
+		t.Fatalf("erwartet ErrClientSecretRequired, bekam %v", err)
+	}
+	if errors.Is(err, ErrLoginRequired) {
+		t.Error("darf nicht als abgelaufene Anmeldung durchgehen")
+	}
+	if cfg.RefreshToken != "r" {
+		t.Errorf("Refresh Token angetastet: %q", cfg.RefreshToken)
+	}
+}
+
+// Ist ein Secret hinterlegt, muss es mitgeschickt werden -- sonst laesst sich
+// eine bestehende Confidential-App gar nicht weiterbenutzen.
+func TestRefreshSendsClientSecretWhenSet(t *testing.T) {
+	var gotSecret string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = r.ParseForm()
+		gotSecret = r.PostForm.Get("client_secret")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"a2","expires_in":14400}`))
+	}))
+	defer srv.Close()
+	old := twitchTokenURL
+	twitchTokenURL = srv.URL
+	defer func() { twitchTokenURL = old }()
+
+	cfg := &config.TwitchConfig{RefreshToken: "r", ClientSecret: "geheim"}
+	if err := testClient(cfg).RefreshAccessToken(); err != nil {
+		t.Fatal(err)
+	}
+	if gotSecret != "geheim" {
+		t.Errorf("client_secret kam als %q an", gotSecret)
+	}
+}
+
+// Ohne hinterlegtes Secret darf das Feld gar nicht erst mitgeschickt werden:
+// ein leeres client_secret laesst Public-Apps scheitern.
+func TestRefreshOmitsEmptyClientSecret(t *testing.T) {
+	var present bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = r.ParseForm()
+		_, present = r.PostForm["client_secret"]
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"a2","expires_in":14400}`))
+	}))
+	defer srv.Close()
+	old := twitchTokenURL
+	twitchTokenURL = srv.URL
+	defer func() { twitchTokenURL = old }()
+
+	if err := testClient(&config.TwitchConfig{RefreshToken: "r"}).RefreshAccessToken(); err != nil {
+		t.Fatal(err)
+	}
+	if present {
+		t.Error("client_secret wurde ohne Wert mitgeschickt")
+	}
+}
+
 // Ohne Refresh Token gibt es nichts zu erneuern -- das ist eine Neuanmeldung,
 // kein Netzwerkfehler.
 func TestRefreshWithoutTokenNeedsLogin(t *testing.T) {

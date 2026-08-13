@@ -223,10 +223,31 @@ sendKey[scancode]: BLOCKIERT vk=0x4C scan=0x26 ext=false down ret=0 err=...
 
 ## Twitch-Anbindung
 
-**Device Code Flow**, kein Client Secret. Ein Secret in einer ausgelieferten Desktop-App wäre
-ohnehin keins, und für den Token-Refresh braucht Twitch es bei diesem Flow nicht.
+**Device Code Flow** — die Anmeldung läuft über einen Code im Browser, ohne Client Secret in
+der App.
 
 Benötigte Scopes: `channel:read:redemptions`, `channel:manage:redemptions`.
+
+### Wenn die Anmeldung nicht über Neustarts hält
+
+Twitch unterscheidet zwei App-Typen, und das entscheidet über den Token-Refresh:
+
+| Client Type | Anmeldung | Erneuern |
+|---|---|---|
+| **Public** | ohne Secret | ✅ ohne Secret |
+| **Confidential** | ohne Secret | ❌ **verlangt das Secret** |
+
+Eine Confidential-App lässt sich also anmelden, aber nach ein paar Stunden nicht mehr
+erneuern — im Debug-Log steht dann `missing client secret`. SCTroll meldet das als
+Einrichtungsproblem und nicht als abgelaufene Anmeldung, weil eine Neuanmeldung es nur bis
+zum nächsten Ablauf verdecken würde.
+
+**Der saubere Weg:** eigene App auf [dev.twitch.tv/console/apps](https://dev.twitch.tv/console/apps)
+anlegen, *Client Type* auf **Public** stellen, OAuth Redirect URL `http://localhost`
+(Pflichtfeld, wird nicht benutzt). Die Client-ID im Twitch-Tab unter *Twitch-App* eintragen.
+
+**Notfalls:** bei einer bestehenden Confidential-App dort auch das Client Secret hinterlegen.
+Es wird nur mitgeschickt, wenn gesetzt, und liegt ausschließlich lokal.
 
 Die Anmeldung überlebt Neustarts:
 

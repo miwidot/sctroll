@@ -1,5 +1,35 @@
 # Changelog
 
+## 1.0.7
+
+Die Anmeldung ging trotz 1.0.6 weiterhin nach ein paar Stunden verloren. Im Debug-Log stand
+der Grund:
+
+```
+RefreshAccessToken: status=400 body={"status":400,"message":"missing client secret"}
+```
+
+Twitch verlangt beim Erneuern ein Client Secret, **wenn die App als „Confidential"
+registriert ist**. Nur Apps vom Typ **„Public"** dürfen ohne erneuern. Die mitgelieferte App
+ist eine Confidential-App — der Login per Device Code Flow klappt damit, der Refresh nicht.
+Die Annahme in 1.0.6, ein Secret sei bei diesem Flow generell entbehrlich, galt also nur für
+die halbe Wahrheit.
+
+- **Client Secret optional hinterlegbar** (`twitch.client_secret` bzw. im Twitch-Tab). Wird
+  nur mitgeschickt, wenn gesetzt — ein leeres Feld ließe Public-Apps scheitern. Nichts davon
+  wird mitgeliefert.
+- **Eigene Twitch-App im Twitch-Tab einstellbar**: Client-ID und optional Secret. Ein Wechsel
+  der Client-ID setzt die Anmeldung zurück und löst die Verknüpfung zu bestehenden Rewards,
+  weil beides immer zu genau einer App gehört — darauf wird hingewiesen.
+- **Eigener Fehler `ErrClientSecretRequired`** statt „Anmeldung abgelaufen". Das ist ein
+  Einrichtungsproblem, kein abgelaufener Token: eine Neuanmeldung hätte es nur bis zum
+  nächsten Ablauf verdeckt und den Nutzer in eine Endlosschleife geschickt. Die Oberfläche
+  zeigt stattdessen, was zu tun ist.
+- Schrittnummerierung im Twitch-Tab korrigiert (stand auf 1 und 3).
+
+Drei neue Tests: fehlendes Secret wird nicht als Ablauf behandelt, ein hinterlegtes Secret
+wird mitgeschickt, ein leeres gar nicht erst.
+
 ## 1.0.6
 
 Die Anmeldung hielt nicht, weil der Token-Refresh bei **jedem** Fehler die gespeicherten

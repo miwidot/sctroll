@@ -45,7 +45,7 @@
   </div>
 
   <div class="sidebar-footer">
-    <span class="version">SCTROLL v1.0.6</span>
+    <span class="version">SCTROLL v1.0.7</span>
   </div>
 </nav>
 

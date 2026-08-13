@@ -40,6 +40,8 @@ export function GetSCDir():Promise<string>;
 
 export function GetSCInstalls():Promise<Array<starcitizen.Install>>;
 
+export function GetTwitchApp():Promise<main.TwitchApp>;
+
 export function GetTwitchChannel():Promise<string>;
 
 export function ImportSCBinds():Promise<number>;
@@ -59,6 +61,8 @@ export function SetLanguage(arg1:string):Promise<void>;
 export function SetSCDir(arg1:string):Promise<void>;
 
 export function SetTargetWindow(arg1:string):Promise<void>;
+
+export function SetTwitchApp(arg1:string,arg2:string):Promise<void>;
 
 export function StartTwitchAuth():Promise<main.DeviceAuthInfo>;
 
