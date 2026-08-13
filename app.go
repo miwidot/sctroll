@@ -18,6 +18,8 @@ import (
 	"sctroll/internal/keylock"
 	"sctroll/internal/starcitizen"
 	"sctroll/internal/twitch"
+	"sctroll/internal/updater"
+	"sctroll/internal/version"
 )
 
 type App struct {
@@ -58,7 +60,11 @@ func (a *App) startup(ctx context.Context) {
 		})
 	})
 
+	// Reste eines vorherigen Updates wegräumen, solange nichts anderes läuft.
+	updater.CleanupOld()
+
 	go a.autoDetectStarCitizen()
+	go a.autoCheckUpdate()
 
 	// Der Refresh Token entscheidet, nicht der Access Token: der ist nach ein
 	// paar Stunden ohnehin abgelaufen und wird beim Verbinden erneuert.
@@ -1005,6 +1011,81 @@ func (a *App) RemoveSCBinds() (int, error) {
 	runtime.EventsEmit(a.ctx, "twitch-log",
 		fmt.Sprintf("%d von sctroll gesetzte Belegungen entfernt — Standardbelegung gilt wieder", removed))
 	return removed, nil
+}
+
+// --- Selbstaktualisierung ---
+
+func (a *App) GetVersion() string { return version.Current }
+
+// CheckForUpdate fragt GitHub nach der neuesten Veroeffentlichung.
+func (a *App) CheckForUpdate() (*updater.Release, error) {
+	rel, err := updater.Check()
+	if err != nil {
+		debuglog.Log("CheckForUpdate: %s", err)
+		return nil, err
+	}
+	if rel.Newer {
+		runtime.EventsEmit(a.ctx, "update-available", rel)
+	}
+	return rel, nil
+}
+
+// InstallUpdate laedt die neue Version, prueft Pruefsumme und Signatur, tauscht
+// die Programmdatei aus und startet neu.
+//
+// Bewusst nur auf Knopfdruck: ein Neustart mitten im Stream waere ein schlechter
+// Zeitpunkt, den das Programm nicht selbst waehlen sollte.
+func (a *App) InstallUpdate() error {
+	rel, err := updater.Check()
+	if err != nil {
+		return err
+	}
+	if !rel.Newer {
+		return fmt.Errorf("es läuft bereits die neueste Version (%s)", version.Current)
+	}
+
+	runtime.EventsEmit(a.ctx, "update-progress", 0.0)
+	path, err := updater.Download(rel, func(p float64) {
+		runtime.EventsEmit(a.ctx, "update-progress", p)
+	})
+	if err != nil {
+		debuglog.Log("InstallUpdate: %s", err)
+		return err
+	}
+
+	runtime.EventsEmit(a.ctx, "twitch-log",
+		fmt.Sprintf("Version %s geprüft — starte neu", rel.Version))
+
+	// Verbindung sauber trennen, damit die neue Instanz nicht auf eine
+	// halboffene EventSub-Session trifft.
+	if a.twClient != nil {
+		a.twClient.Disconnect()
+	}
+	_ = a.cfg.Save()
+
+	if err := updater.Apply(path); err != nil {
+		debuglog.Log("InstallUpdate: %s", err)
+		return err
+	}
+
+	// Der Nachfolger laeuft bereits; diese Instanz macht Platz.
+	go func() {
+		time.Sleep(500 * time.Millisecond)
+		runtime.Quit(a.ctx)
+	}()
+	return nil
+}
+
+// autoCheckUpdate prueft im Hintergrund und meldet sich nur, wenn es etwas gibt.
+func (a *App) autoCheckUpdate() {
+	rel, err := updater.Check()
+	if err != nil {
+		return // beim Start ist oft noch kein Netz da; nicht stoeren
+	}
+	if rel.Newer {
+		debuglog.Log("autoCheckUpdate: Version %s verfügbar", rel.Version)
+		runtime.EventsEmit(a.ctx, "update-available", rel)
+	}
 }
 
 // --- Test und Eingabeverfahren ---

@@ -2,6 +2,32 @@
 
 ## 1.0.7
 
+### Selbstaktualisierung
+
+SCTroll prüft beim Start still im Hintergrund, ob es eine neue Version gibt, und zeigt sie
+als Leiste über der Oberfläche an. Eingespielt wird **nur auf Knopfdruck** — ein Neustart
+mitten im Stream wäre ein schlechter Zeitpunkt, den das Programm nicht selbst wählen sollte.
+In den Einstellungen lässt sich zusätzlich von Hand suchen.
+
+Vor dem Austausch wird zweifach geprüft:
+
+- **SHA256** gegen die veröffentlichte Prüfsumme — belegt einen heilen Download.
+- **Authenticode-Signatur** über `WinVerifyTrust`, dieselbe Prüfung, die Windows beim
+  Ausführen macht. Das ist der eigentliche Schutz: die Prüfsumme kommt aus derselben Quelle
+  wie die Datei. Ohne Signaturprüfung wäre die Update-Funktion ein bequemer Weg, fremden Code
+  auszuführen.
+
+Der Austausch nutzt den üblichen Windows-Weg — die laufende Exe lässt sich nicht
+überschreiben, wohl aber umbenennen: alte zur Seite, neue an ihren Platz, Neustart, Reste
+beim nächsten Start aufräumen. Schlägt das Umbenennen fehl (etwa unter `C:\Program Files`
+ohne Rechte), wird zurückgerollt und die alte Version läuft weiter.
+
+Die Version steht jetzt nur noch in `internal/version` und wird von dort ins Frontend
+gereicht. Ein Test wacht darüber, dass sie zur `productVersion` in `wails.json` passt —
+liefen die auseinander, würde die App Updates auf sich selbst anbieten.
+
+### Twitch-Anmeldung hielt weiterhin nicht
+
 Die Anmeldung ging trotz 1.0.6 weiterhin nach ein paar Stunden verloren. Im Debug-Log stand
 der Grund:
 

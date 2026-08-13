@@ -1,8 +1,17 @@
 <script>
+  import { onMount } from 'svelte'
   import { i18n } from '../i18n'
   import { BrowserOpenURL } from '../../wailsjs/runtime/runtime'
+  import { GetVersion } from '../../wailsjs/go/main/App'
 
   export let currentTab = 'actions'
+
+  // Version kommt aus dem Programm, damit sie nicht an zwei Stellen gepflegt
+  // werden muss und nach einem Update sofort stimmt.
+  let appVersion = ''
+  onMount(async () => {
+    try { appVersion = await GetVersion() } catch (e) {}
+  })
 
   $: tabs = [
     { id: 'actions', label: $i18n('nav.actions'), icon: 'A' },
@@ -45,7 +54,7 @@
   </div>
 
   <div class="sidebar-footer">
-    <span class="version">SCTROLL v1.0.7</span>
+    <span class="version">SCTROLL{appVersion ? ' v' + appVersion : ''}</span>
   </div>
 </nav>
 

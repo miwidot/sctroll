@@ -179,6 +179,22 @@ Maustaste, Wiederholungen oder eine mehrstufige Abfolge.
 
 ---
 
+## Updates
+
+SCTroll prüft beim Start still im Hintergrund auf neue Versionen und zeigt sie als Leiste über
+der Oberfläche. **Eingespielt wird nur auf Knopfdruck** — ein Neustart mitten im Stream wäre
+ein schlechter Zeitpunkt, den das Programm nicht selbst wählen sollte. In den Einstellungen
+lässt sich auch von Hand suchen.
+
+Vor dem Austausch wird zweifach geprüft: die **SHA256-Prüfsumme** gegen die veröffentlichte
+Datei und die **Authenticode-Signatur** über `WinVerifyTrust` — dieselbe Prüfung, die Windows
+beim Ausführen macht. Die Prüfsumme allein würde nur einen heilen Download belegen; erst die
+Signatur belegt die Herkunft.
+
+Liegt SCTroll in einem geschützten Ordner wie `C:\Program Files`, schlägt der Austausch mangels
+Schreibrechten fehl. Dann wird zurückgerollt, die alte Version läuft weiter, und die neue lässt
+sich von Hand von der Releases-Seite holen.
+
 ## Sicherheitsnetze
 
 - **Not-Aus** im Header pausiert alles und deaktiviert die Rewards auf Twitch.
@@ -326,6 +342,8 @@ verändert. Abgedeckt sind unter anderem:
 | `internal/twitch/twitch.go` | Device Code Flow, Token-Verwaltung, EventSub, Rewards, Erstattungen |
 | `internal/actions/executor.go` | Cooldowns, Warteschlange, Fenster-Prüfung, Ausführung |
 | `internal/input/input.go` | `SendInput`, Sendeverfahren, Tastennamen |
+| `internal/updater/` | Update-Prüfung, Download, Signaturprüfung, Austausch |
+| `internal/version/` | Programmversion und Versionsvergleich |
 | `internal/keylock/keylock.go` | Low-Level-Keyboard-Hook |
 | `app.go` | Wails-Bindings fürs Frontend |
 | `frontend/` | Svelte-Oberfläche, Deutsch und Englisch |

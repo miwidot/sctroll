@@ -10,6 +10,10 @@ export function BrowseSCDir() {
   return window['go']['main']['App']['BrowseSCDir']();
 }
 
+export function CheckForUpdate() {
+  return window['go']['main']['App']['CheckForUpdate']();
+}
+
 export function ConnectTwitch() {
   return window['go']['main']['App']['ConnectTwitch']();
 }
@@ -82,8 +86,16 @@ export function GetTwitchChannel() {
   return window['go']['main']['App']['GetTwitchChannel']();
 }
 
+export function GetVersion() {
+  return window['go']['main']['App']['GetVersion']();
+}
+
 export function ImportSCBinds() {
   return window['go']['main']['App']['ImportSCBinds']();
+}
+
+export function InstallUpdate() {
+  return window['go']['main']['App']['InstallUpdate']();
 }
 
 export function IsGameRunning() {

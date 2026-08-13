@@ -280,3 +280,30 @@ export namespace starcitizen {
 
 }
 
+export namespace updater {
+	
+	export class Release {
+	    version: string;
+	    tag: string;
+	    notes: string;
+	    published_at: string;
+	    url: string;
+	    newer: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new Release(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.version = source["version"];
+	        this.tag = source["tag"];
+	        this.notes = source["notes"];
+	        this.published_at = source["published_at"];
+	        this.url = source["url"];
+	        this.newer = source["newer"];
+	    }
+	}
+
+}
+

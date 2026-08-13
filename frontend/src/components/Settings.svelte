@@ -3,7 +3,8 @@
   import { GetConfig, SetTargetWindow, GetLanguage, SetLanguage,
            GetSCDir, GetSCChannel, BrowseSCDir, IsGameRunning,
            GetBindStatus, ImportSCBinds, RemoveSCBinds,
-           GetInputMode, SetInputMode, GetDebugLogPath } from '../../wailsjs/go/main/App'
+           GetInputMode, SetInputMode, GetDebugLogPath,
+           GetVersion, CheckForUpdate } from '../../wailsjs/go/main/App'
   import { i18n, locale } from '../i18n'
 
   let targetWindow = ''
@@ -17,8 +18,27 @@
   let importing = false
   let inputMode = 'scancode'
   let logPath = ''
+  let appVersion = ''
+  let checking = false
+  let updateStatus = ''
 
   const de = (a, b) => currentLang === 'de' ? a : b
+
+  async function checkUpdate() {
+    checking = true
+    updateStatus = ''
+    try {
+      const r = await CheckForUpdate()
+      updateStatus = r.newer
+        ? de(`Version ${r.version} verfügbar — der Hinweis oben führt zum Update.`,
+             `Version ${r.version} available — the banner above installs it.`)
+        : de(`Du hast die neueste Version (${appVersion}).`,
+             `You are on the latest version (${appVersion}).`)
+    } catch (e) {
+      updateStatus = de('Fehler: ', 'Error: ') + e
+    }
+    checking = false
+  }
 
   async function changeInputMode(mode) {
     inputMode = mode
@@ -33,6 +53,7 @@
     try {
       inputMode = await GetInputMode()
       logPath = await GetDebugLogPath()
+      appVersion = await GetVersion()
     } catch(e) {}
     await refreshSC()
   })
@@ -254,8 +275,21 @@
     <p class="hint">{$i18n('settings.about.desc')}</p>
     <div class="about-footer">
       <span class="about-brand">SCTroll</span>
-      <span class="about-version">v1.0.1</span>
+      <span class="about-version">v{appVersion}</span>
     </div>
+
+    <div class="form-row" style="margin-top:14px">
+      <button class="btn" on:click={checkUpdate} disabled={checking}>
+        {checking ? de('Suche…', 'Checking…') : de('Nach Updates suchen', 'Check for updates')}
+      </button>
+    </div>
+    {#if updateStatus}
+      <p class="import-status" class:error={updateStatus.startsWith('Fehler')}>{updateStatus}</p>
+    {/if}
+    <p class="hint muted" style="margin-top:10px">
+      {de('Beim Start wird still im Hintergrund geprüft. Eingespielt wird nur auf Knopfdruck — ein Neustart mitten im Stream wäre ein schlechter Zeitpunkt. Vor dem Austausch werden Prüfsumme und Signatur kontrolliert.',
+          'A silent check runs at startup. Installing only ever happens on click — a restart mid-stream would be a bad moment. Checksum and signature are verified before the swap.')}
+    </p>
   </div>
 </div>
 

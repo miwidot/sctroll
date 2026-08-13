@@ -5,12 +5,14 @@
   import TwitchSetup from './components/TwitchSetup.svelte'
   import EventLog from './components/EventLog.svelte'
   import Settings from './components/Settings.svelte'
+  import UpdateBanner from './components/UpdateBanner.svelte'
 
   let currentTab = 'actions'
 </script>
 
 <div class="app-container">
   <Header />
+  <UpdateBanner />
   <div class="main-layout">
     <Sidebar bind:currentTab />
     <main class="content">
