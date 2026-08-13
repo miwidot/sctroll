@@ -26,6 +26,21 @@ Die Version steht jetzt nur noch in `internal/version` und wird von dort ins Fro
 gereicht. Ein Test wacht darüber, dass sie zur `productVersion` in `wails.json` passt —
 liefen die auseinander, würde die App Updates auf sich selbst anbieten.
 
+### Neue Twitch-App vom Typ „Public"
+
+Die bisher mitgelieferte App stammte aus dem Tarkov-Vorläufer und war als **Confidential**
+registriert. Solche Apps dürfen den Access Token nicht ohne Client Secret erneuern — und ein
+Secret in einer ausgelieferten Anwendung ist keins. Damit war das Problem für alle Nutzer
+strukturell nicht lösbar.
+
+Die neue App ist als **Public** registriert. Für die existiert gar kein Secret, und der
+Refresh funktioniert ohne. Bestehende Installationen werden beim Start automatisch umgestellt:
+Client-ID getauscht, Tokens und Reward-Verknüpfungen der alten App entfernt, weil beide immer
+zu genau einer App gehören.
+
+**Einmalig nötig:** neu anmelden und die Rewards neu anlegen. Die unter der alten App
+erstellten Rewards bleiben auf dem Kanal stehen und sollten vorher gelöscht werden.
+
 ### Twitch-Anmeldung hielt weiterhin nicht
 
 Die Anmeldung ging trotz 1.0.6 weiterhin nach ein paar Stunden verloren. Im Debug-Log stand

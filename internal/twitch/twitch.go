@@ -18,14 +18,42 @@ import (
 	"sctroll/internal/debuglog"
 )
 
-// DefaultClientID ist die Twitch-App, die sctroll ohne weitere Einrichtung nutzt.
-// Ueberschreibbar ueber config.json (twitch.client_id) -- eine eigene App pro
-// Tool ist sauberer, weil "only_manageable_rewards" pro Client-ID gilt.
+// DefaultClientID ist die Twitch-App, die SCTroll ohne weitere Einrichtung nutzt.
+// Registriert als Client Type "Public" -- nur solche Apps duerfen den Access
+// Token ohne Client Secret erneuern. Ein Secret gibt es dafuer gar nicht, es
+// kann also auch keins mitgeliefert werden oder abhanden kommen.
 //
-// Bewusst KEIN Client Secret: der Device Code Flow ist fuer oeffentliche Clients
-// gedacht, auch der Token-Refresh kommt ohne Secret aus. Ein Secret in einer
-// ausgelieferten Desktop-App ist ohnehin keins.
-const DefaultClientID = "recddyemjfl0xbklhcnukacerbz11n"
+// Ueberschreibbar im Twitch-Tab, etwa wenn jemand seine eigene App benutzen will.
+const DefaultClientID = "o9awit9ajxzn0s1ci2yyxjy8lv17h4"
+
+// legacyClientIDs sind frueher mitgelieferte Apps, die abgeloest wurden.
+//
+// recddye... war als "Confidential" registriert und stammte aus dem
+// Tarkov-Vorlaeufer. Solche Apps lehnen den Refresh ohne Secret ab -- die
+// Anmeldung ging damit nach wenigen Stunden verloren.
+var legacyClientIDs = map[string]bool{
+	"recddyemjfl0xbklhcnukacerbz11n": true,
+}
+
+// MigrateLegacyApp stellt eine gespeicherte Konfiguration auf die aktuelle
+// Standard-App um und meldet, ob etwas geaendert wurde.
+//
+// Tokens und Rewards gehoeren immer zu genau einer Client-ID: die Anmeldung wird
+// deshalb zurueckgesetzt, und der Aufrufer muss die Reward-Verknuepfungen loesen.
+// Ohne das benutzt eine bestehende Installation still die kaputte alte App weiter.
+func MigrateLegacyApp(cfg *config.TwitchConfig) bool {
+	if !legacyClientIDs[cfg.ClientID] {
+		return false
+	}
+
+	debuglog.Log("twitch: alte App %s wird durch %s ersetzt", cfg.ClientID, DefaultClientID)
+	cfg.ClientID = DefaultClientID
+	cfg.ClientSecret = ""
+	cfg.AccessToken = ""
+	cfg.RefreshToken = ""
+	cfg.ExpiresAt = time.Time{}
+	return true
+}
 
 // Als Variablen, damit Tests sie auf einen lokalen Stub-Server zeigen lassen
 // koennen -- die Token-Behandlung laesst sich sonst nicht pruefen.

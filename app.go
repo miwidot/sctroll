@@ -63,6 +63,25 @@ func (a *App) startup(ctx context.Context) {
 	// Reste eines vorherigen Updates wegräumen, solange nichts anderes läuft.
 	updater.CleanupOld()
 
+	// Alte Twitch-App ablösen. Die Rewards der alten App sind für die neue nicht
+	// mehr verwaltbar, deshalb müssen auch die Verknüpfungen weg -- sonst hält
+	// SCTroll Reward-IDs fest, die es nicht mehr anfassen darf.
+	if twitch.MigrateLegacyApp(&cfg.Twitch) {
+		for _, act := range cfg.GetActions() {
+			if act.RewardID != "" {
+				act.RewardID = ""
+				cfg.SetAction(act)
+			}
+		}
+		_ = cfg.Save()
+		go func() {
+			<-time.After(2 * time.Second) // erst wenn die Oberfläche lauscht
+			runtime.EventsEmit(a.ctx, "twitch-log",
+				"Twitch-App gewechselt — bitte einmal neu verbinden und die Rewards neu anlegen")
+			runtime.EventsEmit(a.ctx, "twitch-disconnected", "App gewechselt")
+		}()
+	}
+
 	go a.autoDetectStarCitizen()
 	go a.autoCheckUpdate()
 

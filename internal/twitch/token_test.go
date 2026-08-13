@@ -211,6 +211,53 @@ func TestEnsureValidTokenRefreshesBeforeExpiry(t *testing.T) {
 	}
 }
 
+// Bestehende Installationen tragen die alte, als "Confidential" registrierte App
+// in ihrer Konfiguration. Ohne Umstellung benutzen sie die still weiter und
+// verlieren die Anmeldung weiterhin bei jedem Token-Ablauf.
+func TestMigrateLegacyApp(t *testing.T) {
+	cfg := &config.TwitchConfig{
+		ClientID:     "recddyemjfl0xbklhcnukacerbz11n",
+		ClientSecret: "altes-secret",
+		AccessToken:  "a",
+		RefreshToken: "r",
+		ExpiresAt:    time.Now().Add(time.Hour),
+	}
+
+	if !MigrateLegacyApp(cfg) {
+		t.Fatal("alte App wurde nicht erkannt")
+	}
+	if cfg.ClientID != DefaultClientID {
+		t.Errorf("Client-ID ist %q, erwartet %q", cfg.ClientID, DefaultClientID)
+	}
+	// Tokens gehoeren zur alten App und sind fuer die neue wertlos.
+	if cfg.AccessToken != "" || cfg.RefreshToken != "" || cfg.ClientSecret != "" {
+		t.Error("Zugangsdaten der alten App wurden nicht entfernt")
+	}
+	if !cfg.ExpiresAt.IsZero() {
+		t.Error("Ablaufzeitpunkt wurde nicht zurückgesetzt")
+	}
+}
+
+// Eine eigene App des Nutzers darf die Umstellung nicht anfassen.
+func TestMigrateLegacyAppLeavesCustomApp(t *testing.T) {
+	cfg := &config.TwitchConfig{ClientID: "meine-eigene-app", RefreshToken: "r"}
+	if MigrateLegacyApp(cfg) {
+		t.Fatal("eigene App wurde fälschlich umgestellt")
+	}
+	if cfg.ClientID != "meine-eigene-app" || cfg.RefreshToken != "r" {
+		t.Error("eigene App wurde verändert")
+	}
+}
+
+// Die aktuelle Standard-App darf niemals als abgelöst gelten -- das würde bei
+// jedem Start die Anmeldung löschen.
+func TestDefaultClientIDIsNotLegacy(t *testing.T) {
+	cfg := &config.TwitchConfig{ClientID: DefaultClientID, RefreshToken: "r"}
+	if MigrateLegacyApp(cfg) {
+		t.Fatal("die Standard-App gilt als abgelöst — Endlos-Abmeldung bei jedem Start")
+	}
+}
+
 func TestHasLoginIgnoresAccessToken(t *testing.T) {
 	// Access Token abgelaufen und geleert, Refresh Token vorhanden:
 	// das ist eine gültige gespeicherte Anmeldung.

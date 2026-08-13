@@ -244,7 +244,7 @@ der App.
 
 Benötigte Scopes: `channel:read:redemptions`, `channel:manage:redemptions`.
 
-### Wenn die Anmeldung nicht über Neustarts hält
+### Warum die App vom Typ „Public" ist
 
 Twitch unterscheidet zwei App-Typen, und das entscheidet über den Token-Refresh:
 
@@ -253,17 +253,22 @@ Twitch unterscheidet zwei App-Typen, und das entscheidet über den Token-Refresh
 | **Public** | ohne Secret | ✅ ohne Secret |
 | **Confidential** | ohne Secret | ❌ **verlangt das Secret** |
 
-Eine Confidential-App lässt sich also anmelden, aber nach ein paar Stunden nicht mehr
-erneuern — im Debug-Log steht dann `missing client secret`. SCTroll meldet das als
-Einrichtungsproblem und nicht als abgelaufene Anmeldung, weil eine Neuanmeldung es nur bis
-zum nächsten Ablauf verdecken würde.
+Eine Confidential-App lässt sich anmelden, aber nach ein paar Stunden nicht mehr erneuern —
+im Debug-Log steht dann `missing client secret`, und die Anmeldung ist bei jedem Start fällig.
+Die mitgelieferte App ist deshalb als **Public** registriert. Für solche Apps existiert gar
+kein Secret, es kann also auch keins mitgeliefert werden oder abhanden kommen.
 
-**Der saubere Weg:** eigene App auf [dev.twitch.tv/console/apps](https://dev.twitch.tv/console/apps)
-anlegen, *Client Type* auf **Public** stellen, OAuth Redirect URL `http://localhost`
-(Pflichtfeld, wird nicht benutzt). Die Client-ID im Twitch-Tab unter *Twitch-App* eintragen.
+Wer eine **eigene App** benutzen will: auf
+[dev.twitch.tv/console/apps](https://dev.twitch.tv/console/apps) anlegen, *Client Type* auf
+**Public**, OAuth Redirect URL `http://localhost` (Pflichtfeld, wird beim Device Code Flow
+nicht benutzt). Client-ID im Twitch-Tab unter *Twitch-App* eintragen.
 
-**Notfalls:** bei einer bestehenden Confidential-App dort auch das Client Secret hinterlegen.
+Für eine bestehende **Confidential-App** lässt sich dort auch das Client Secret hinterlegen.
 Es wird nur mitgeschickt, wenn gesetzt, und liegt ausschließlich lokal.
+
+> Tokens und Rewards gehören immer zu genau einer Client-ID. Ein Wechsel bedeutet: einmal neu
+> anmelden, und die alten Rewards vorher löschen — für die neue App sind sie nicht mehr
+> verwaltbar und blieben sonst doppelt auf dem Kanal stehen.
 
 Die Anmeldung überlebt Neustarts:
 
