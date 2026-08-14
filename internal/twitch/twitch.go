@@ -503,6 +503,11 @@ func (c *Client) UpdateReward(rewardID string, fields map[string]interface{}, co
 	if resp.StatusCode != 200 {
 		respBody, _ := io.ReadAll(resp.Body)
 		debuglog.Log("UpdateReward: status=%d body=%s", resp.StatusCode, string(respBody))
+		// 404 heisst: die gespeicherte ID gehoert zu keinem Reward mehr. Der
+		// Aufrufer muss die Verknuepfung verwerfen statt es erneut zu versuchen.
+		if resp.StatusCode == 404 {
+			return ErrRewardNotFound
+		}
 		return fmt.Errorf("update reward failed (status %d)", resp.StatusCode)
 	}
 	return nil
@@ -768,6 +773,14 @@ var ErrLoginRequired = errors.New("Twitch-Anmeldung abgelaufen — bitte neu ver
 // Einloesungen darauf laufen ins Leere. Nur der Kanalinhaber kann ihn im
 // Twitch-Dashboard entfernen.
 var ErrRewardExists = errors.New("Reward mit diesem Titel existiert bereits auf dem Kanal")
+
+// ErrRewardNotFound heisst: die gespeicherte Reward-ID zeigt ins Leere -- der
+// Reward wurde auf Twitch geloescht.
+//
+// Das passiert im Alltag staendig, etwa wenn jemand im Dashboard aufraeumt. Die
+// Verknuepfung ist dann veraltet und muss verworfen werden, sonst bleibt die
+// Aktion dauerhaft ohne Reward und laesst sich nie wieder ausloesen.
+var ErrRewardNotFound = errors.New("Reward existiert auf Twitch nicht mehr")
 
 var ErrClientSecretRequired = errors.New(
 	"Twitch-App verlangt ein Client Secret zum Erneuern. Entweder den Client Type der App " +

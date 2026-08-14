@@ -285,6 +285,53 @@ func TestCreateRewardDetectsDuplicate(t *testing.T) {
 	}
 }
 
+// Eine gespeicherte Reward-ID kann jederzeit ins Leere zeigen, etwa weil im
+// Twitch-Dashboard aufgeräumt wurde. Twitch antwortet dann mit 404. Ohne die
+// Unterscheidung bliebe die Aktion dauerhaft ohne Reward und wäre nie auslösbar.
+func TestUpdateRewardDetectsDeletedReward(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(404)
+		_, _ = w.Write([]byte(`{"error":"Not Found","status":404,` +
+			`"message":"The custom reward specified in the id query parameter was not found."}`))
+	}))
+	defer srv.Close()
+	old := twitchAPIURL
+	twitchAPIURL = srv.URL
+	defer func() { twitchAPIURL = old }()
+
+	c := testClient(&config.TwitchConfig{AccessToken: "a", RefreshToken: "r",
+		ExpiresAt: time.Now().Add(time.Hour), BroadcasterID: "1"})
+
+	err := c.UpdateRewardEnabled("tote-id", true, "")
+	if !errors.Is(err, ErrRewardNotFound) {
+		t.Fatalf("erwartet ErrRewardNotFound, bekam %v", err)
+	}
+}
+
+// Andere Fehler dürfen nicht als gelöschter Reward durchgehen -- sonst würde bei
+// einem vorübergehenden Serverfehler ein zweiter Reward angelegt.
+func TestUpdateRewardKeepsOtherErrorsDistinct(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(500)
+	}))
+	defer srv.Close()
+	old := twitchAPIURL
+	twitchAPIURL = srv.URL
+	defer func() { twitchAPIURL = old }()
+
+	c := testClient(&config.TwitchConfig{AccessToken: "a", RefreshToken: "r",
+		ExpiresAt: time.Now().Add(time.Hour), BroadcasterID: "1"})
+
+	err := c.UpdateRewardEnabled("id", true, "")
+	if err == nil {
+		t.Fatal("HTTP 500 muss ein Fehler sein")
+	}
+	if errors.Is(err, ErrRewardNotFound) {
+		t.Error("HTTP 500 darf nicht als gelöschter Reward gelten")
+	}
+}
+
 func TestHasLoginIgnoresAccessToken(t *testing.T) {
 	// Access Token abgelaufen und geleert, Refresh Token vorhanden:
 	// das ist eine gültige gespeicherte Anmeldung.

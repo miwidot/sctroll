@@ -309,12 +309,25 @@ func (a *App) ToggleAction(id string, enabled bool) error {
 
 	if target.RewardID != "" {
 		// Vorhandenen Reward auf Twitch pausieren beziehungsweise freigeben.
-		if err := a.twClient.UpdateRewardEnabled(target.RewardID, enabled, target.RewardColor); err != nil {
+		err := a.twClient.UpdateRewardEnabled(target.RewardID, enabled, target.RewardColor)
+		if err == nil {
+			return nil
+		}
+
+		// Zeigt die gespeicherte ID ins Leere, wurde der Reward auf Twitch
+		// geloescht. Die Verknuepfung wegwerfen und unten neu anlegen -- sonst
+		// bliebe die Aktion dauerhaft ohne Reward und waere nie ausloesbar.
+		if !errors.Is(err, twitch.ErrRewardNotFound) {
 			debuglog.Log("ToggleAction: UpdateRewardEnabled fehlgeschlagen: %s", err)
 			runtime.EventsEmit(a.ctx, "twitch-log", fmt.Sprintf(
 				"%q konnte auf Twitch nicht umgeschaltet werden: %s", target.Name, err))
+			return nil
 		}
-		return nil
+
+		debuglog.Log("ToggleAction: %s hatte eine veraltete Reward-ID (%s) — wird neu angelegt",
+			id, target.RewardID)
+		target.RewardID = ""
+		a.cfg.SetAction(*target)
 	}
 
 	if !enabled {

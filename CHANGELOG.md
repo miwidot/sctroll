@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.0.10
+
+Aus dem Log von 1.0.9 aufgefallen: rund ein Dutzend gespeicherter Reward-IDs zeigten auf
+Rewards, die es auf Twitch nicht mehr gab.
+
+```
+UpdateReward: status=404 "The custom reward specified in the id query parameter was not found."
+```
+
+Das passiert im Alltag ständig — es reicht, im Twitch-Dashboard aufzuräumen. Bisher wurde der
+Fehler nur protokolliert und aufgegeben: die Aktion galt als aktiv, hatte aber keinen Reward
+mehr auf dem Kanal und war damit **dauerhaft nicht auslösbar**. Ohne vollständigen Sync gab es
+keinen Weg zurück.
+
+- **Veraltete Verknüpfungen heilen sich selbst.** Antwortet Twitch mit 404, wird die
+  gespeicherte Reward-ID verworfen und der Reward neu angelegt (`ErrRewardNotFound`).
+- Andere Fehler bleiben davon unberührt — ein vorübergehender Serverfehler darf nicht dazu
+  führen, dass ein zweiter Reward entsteht.
+
 ## 1.0.9
 
 Das An- und Ausschalten einzelner Aktionen wirkte wirkungslos, ohne dass irgendwo etwas dazu
