@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.0.8
+
+Im Live-Betrieb aufgefallen: Einlösungen liefen ins Leere, ohne dass irgendwo etwas dazu stand.
+Im Log tauchte nur `Redemption: NO MATCH` auf.
+
+Ursache waren Rewards, die noch von der alten Twitch-App auf dem Kanal lagen. Twitch lässt eine
+App nur ihre **eigenen** Rewards verwalten: `only_manageable_rewards` liefert die fremden gar
+nicht erst, also versucht SCTroll sie anzulegen — und Twitch lehnt wegen Namensgleichheit mit
+`DUPLICATE_REWARD` ab. Die Aktion blieb unverknüpft, jede Einlösung darauf löste nichts aus.
+Löschen kann SCTroll sie ebenfalls nicht; das geht nur im Twitch-Dashboard.
+
+- **Doppelte Rewards werden erkannt** (`ErrRewardExists`) statt in einer allgemeinen
+  Fehlermeldung unterzugehen.
+- **Beim Synchronisieren** wird pro betroffenem Reward gemeldet, was zu tun ist, und am Ende
+  gesammelt: *„Einlösungen darauf lösen NICHTS aus."*
+- **Bei einer Einlösung ohne Treffer** wird geprüft, ob der Titel zu einer Aktion passt. Wenn
+  ja, ist es ein solcher Fremd-Reward — und das steht jetzt im Log und im Twitch-Log der
+  Oberfläche, statt nur als `NO MATCH`. Rewards anderer Tools werden weiterhin still ignoriert.
+
 ## 1.0.7
 
 ### Selbstaktualisierung

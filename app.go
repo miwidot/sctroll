@@ -609,7 +609,24 @@ func (a *App) setupTwitchCallbacks() {
 			return
 		}
 
-		debuglog.Log("Redemption: NO MATCH for rewardID=%s", rewardID)
+		// Kein Treffer über die Reward-ID. Passt aber der Titel zu einer unserer
+		// Aktionen, dann ist der Reward ein Rest einer früheren App-Registrierung:
+		// er liegt auf dem Kanal, gehört uns aber nicht und ist deshalb nicht
+		// verknüpft. Ohne diesen Hinweis sucht man den Fehler beim Tastendruck.
+		for _, action := range a.cfg.GetActions() {
+			if !strings.EqualFold(action.RewardTitle, rewardTitle) {
+				continue
+			}
+			debuglog.Log("Redemption: %q passt zu Aktion %s, ist aber nicht verknüpft "+
+				"(fremder Reward, reward_id=%s)", rewardTitle, action.ID, rewardID)
+			runtime.EventsEmit(a.ctx, "twitch-log", fmt.Sprintf(
+				"%q gehört einer anderen App und löst deshalb nichts aus — "+
+					"im Twitch-Dashboard löschen und Rewards neu synchronisieren", rewardTitle))
+			return
+		}
+
+		// Reward eines anderen Tools oder von Hand angelegt: geht uns nichts an.
+		debuglog.Log("Redemption: NO MATCH for rewardID=%s (%q)", rewardID, rewardTitle)
 	})
 
 	a.twClient.SetOnConnect(func() {
@@ -661,6 +678,10 @@ func (a *App) SyncRewards() error {
 		debuglog.Log("SyncRewards: nicht verbunden")
 		return fmt.Errorf("not connected to Twitch")
 	}
+
+	// Rewards, die gleichnamig schon auf dem Kanal liegen, aber einer anderen
+	// App gehören. Die bleiben unverknüpft und werden am Ende gesammelt gemeldet.
+	var orphaned []string
 
 	debuglog.Log("=== SyncRewards START ===")
 
@@ -732,6 +753,18 @@ func (a *App) SyncRewards() error {
 		rewardID, err := a.twClient.CreateReward(action.RewardTitle, action.RewardCost, twCooldown, action.RewardColor)
 		if err != nil {
 			debuglog.Log("SyncRewards: FEHLER beim Erstellen von %s: %s", action.ID, err)
+
+			// Fremder Reward gleichen Namens: die Aktion bleibt unverknüpft und
+			// jede Einlösung läuft ins Leere. Das muss deutlich werden, sonst
+			// sucht man den Fehler beim Tastendruck.
+			if errors.Is(err, twitch.ErrRewardExists) {
+				orphaned = append(orphaned, action.RewardTitle)
+				runtime.EventsEmit(a.ctx, "twitch-log", fmt.Sprintf(
+					"%q existiert schon auf deinem Kanal, gehört aber einer anderen App — "+
+						"bitte im Twitch-Dashboard löschen und erneut synchronisieren", action.RewardTitle))
+				continue
+			}
+
 			runtime.EventsEmit(a.ctx, "twitch-log",
 				fmt.Sprintf("Fehler beim Erstellen von '%s': %s", action.RewardTitle, err.Error()))
 			continue
@@ -742,6 +775,16 @@ func (a *App) SyncRewards() error {
 		debuglog.Log("SyncRewards: %s erstellt → ID=%s", action.ID, rewardID)
 		runtime.EventsEmit(a.ctx, "twitch-log",
 			fmt.Sprintf("Reward erstellt: %s (ID: %s)", action.RewardTitle, rewardID))
+	}
+
+	if len(orphaned) > 0 {
+		debuglog.Log("SyncRewards: %d fremde Rewards blockieren die Verknüpfung: %v",
+			len(orphaned), orphaned)
+		runtime.EventsEmit(a.ctx, "rewards-orphaned", orphaned)
+		runtime.EventsEmit(a.ctx, "twitch-log", fmt.Sprintf(
+			"%d Reward(s) konnten nicht verknüpft werden. Einlösungen darauf lösen NICHTS aus. "+
+				"Im Twitch-Dashboard unter Kanalpunkte löschen, dann erneut synchronisieren: %s",
+			len(orphaned), strings.Join(orphaned, ", ")))
 	}
 
 	debuglog.Log("=== SyncRewards ENDE ===")

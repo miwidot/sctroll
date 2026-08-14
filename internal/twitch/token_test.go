@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -255,6 +256,32 @@ func TestDefaultClientIDIsNotLegacy(t *testing.T) {
 	cfg := &config.TwitchConfig{ClientID: DefaultClientID, RefreshToken: "r"}
 	if MigrateLegacyApp(cfg) {
 		t.Fatal("die Standard-App gilt als abgelöst — Endlos-Abmeldung bei jedem Start")
+	}
+}
+
+// Ein gleichnamiger Reward einer anderen App muss als solcher erkannt werden.
+// Twitch antwortet darauf mit DUPLICATE_REWARD; ohne die Unterscheidung bleibt
+// die Aktion still unverknüpft und jede Einlösung läuft ins Leere.
+func TestCreateRewardDetectsDuplicate(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(400)
+		_, _ = w.Write([]byte(`{"error":"Bad Request","status":400,"message":"CREATE_CUSTOM_REWARD_DUPLICATE_REWARD"}`))
+	}))
+	defer srv.Close()
+	old := twitchAPIURL
+	twitchAPIURL = srv.URL
+	defer func() { twitchAPIURL = old }()
+
+	c := testClient(&config.TwitchConfig{AccessToken: "a", RefreshToken: "r",
+		ExpiresAt: time.Now().Add(time.Hour), BroadcasterID: "1"})
+
+	_, err := c.CreateReward("Helm ab!", 500, 60000, "")
+	if !errors.Is(err, ErrRewardExists) {
+		t.Fatalf("erwartet ErrRewardExists, bekam %v", err)
+	}
+	if !strings.Contains(err.Error(), "Helm ab!") {
+		t.Errorf("Fehlermeldung nennt den Reward nicht: %s", err)
 	}
 }
 

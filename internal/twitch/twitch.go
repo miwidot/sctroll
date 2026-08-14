@@ -395,6 +395,12 @@ func (c *Client) CreateReward(title string, cost int, cooldownMs int, color stri
 	respBody, _ := io.ReadAll(resp.Body)
 	debuglog.Log("CreateReward: status=%d body=%s", resp.StatusCode, string(respBody))
 	if resp.StatusCode != 200 {
+		// Ein gleichnamiger Reward existiert schon auf dem Kanal, gehoert aber
+		// nicht dieser App -- typischerweise ein Rest einer frueheren
+		// App-Registrierung. Twitch laesst ihn weder anlegen noch verwalten.
+		if strings.Contains(strings.ToUpper(string(respBody)), "DUPLICATE_REWARD") {
+			return "", fmt.Errorf("%w: %q", ErrRewardExists, title)
+		}
 		return "", fmt.Errorf("failed to create reward (status %d): %s", resp.StatusCode, string(respBody))
 	}
 
@@ -754,6 +760,15 @@ var ErrLoginRequired = errors.New("Twitch-Anmeldung abgelaufen — bitte neu ver
 // Das ist kein abgelaufener Token, sondern ein Einrichtungsproblem -- der
 // Refresh Token ist voellig in Ordnung. Eine Neuanmeldung hilft nur bis zum
 // naechsten Ablauf und faellt dann wieder auf die Nase.
+// ErrRewardExists heisst: auf dem Kanal liegt bereits ein Reward mit diesem
+// Titel, der einer anderen Anwendung gehoert.
+//
+// Twitch erlaubt einer App nur, ihre eigenen Rewards zu verwalten. Ein solcher
+// Fremd-Reward laesst sich also weder anlegen noch loeschen noch verknuepfen --
+// Einloesungen darauf laufen ins Leere. Nur der Kanalinhaber kann ihn im
+// Twitch-Dashboard entfernen.
+var ErrRewardExists = errors.New("Reward mit diesem Titel existiert bereits auf dem Kanal")
+
 var ErrClientSecretRequired = errors.New(
 	"Twitch-App verlangt ein Client Secret zum Erneuern. Entweder den Client Type der App " +
 		"auf \"Public\" stellen (dev.twitch.tv/console/apps) oder das Secret im Twitch-Tab hinterlegen")
