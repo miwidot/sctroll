@@ -21,6 +21,8 @@ export function DisconnectTwitch():Promise<void>;
 
 export function GetActions():Promise<Array<config.Action>>;
 
+export function GetAutostart():Promise<boolean>;
+
 export function GetBindStatus():Promise<Array<main.BindStatus>>;
 
 export function GetConfig():Promise<config.Config>;
@@ -58,6 +60,8 @@ export function IsGameRunning():Promise<boolean>;
 export function IsTwitchConnected():Promise<boolean>;
 
 export function RemoveSCBinds():Promise<number>;
+
+export function SetAutostart(arg1:boolean):Promise<void>;
 
 export function SetGlobalEnable(arg1:boolean):Promise<void>;
 

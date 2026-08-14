@@ -4,7 +4,8 @@
            GetSCDir, GetSCChannel, BrowseSCDir, IsGameRunning,
            GetBindStatus, ImportSCBinds, RemoveSCBinds,
            GetInputMode, SetInputMode, GetDebugLogPath,
-           GetVersion, CheckForUpdate } from '../../wailsjs/go/main/App'
+           GetVersion, CheckForUpdate,
+           GetAutostart, SetAutostart } from '../../wailsjs/go/main/App'
   import { i18n, locale } from '../i18n'
 
   let targetWindow = ''
@@ -19,11 +20,25 @@
   let inputMode = 'scancode'
   let logPath = ''
   let appVersion = ''
+  let autostartOn = false
+  let autostartStatus = ''
   let checking = false
   let updateStatus = ''
 
   const de = (a, b) => currentLang === 'de' ? a : b
 
+
+  async function toggleAutostart(e) {
+    const want = e.target.checked
+    autostartStatus = ''
+    try {
+      await SetAutostart(want)
+      autostartOn = await GetAutostart()
+    } catch (err) {
+      autostartStatus = de('Fehler: ', 'Error: ') + err
+      autostartOn = await GetAutostart()   // Zustand zurückholen, nicht raten
+    }
+  }
   async function checkUpdate() {
     checking = true
     updateStatus = ''
@@ -54,6 +69,7 @@
       inputMode = await GetInputMode()
       logPath = await GetDebugLogPath()
       appVersion = await GetVersion()
+      autostartOn = await GetAutostart()
     } catch(e) {}
     await refreshSC()
   })
@@ -253,6 +269,21 @@
           'Scancode is the default. Virtual-Key is what InputSimulator does — the Star Citizen Stream Deck plugin demonstrably works with it. If Star Citizen runs as administrator, SCTroll has to as well, otherwise Windows blocks every press.')}
     </p>
     <p class="path">{de('Debug-Log', 'Debug log')}: {logPath}</p>
+  </div>
+
+  <div class="section chamfer">
+    <h3>{de('Mit Windows starten', 'Start with Windows')}</h3>
+    <p class="hint">
+      {de('Trägt SCTroll in den Autostart deines Benutzerkontos ein. Keine Administratorrechte nötig, und nach einem Update zeigt der Eintrag automatisch auf die neue Programmdatei.',
+          'Adds SCTroll to your user account\'s startup. No administrator rights needed, and after an update the entry automatically points at the new executable.')}
+    </p>
+    <label class="switch-row">
+      <input type="checkbox" checked={autostartOn} on:change={toggleAutostart} />
+      <span>{autostartOn ? de('Startet mit Windows', 'Starts with Windows') : de('Startet nicht mit Windows', 'Does not start with Windows')}</span>
+    </label>
+    {#if autostartStatus}
+      <p class="import-status" class:error={autostartStatus.startsWith('Fehler')}>{autostartStatus}</p>
+    {/if}
   </div>
 
   <div class="section chamfer">
@@ -503,4 +534,8 @@
     font-size: 11px;
     color: var(--text-muted);
   }
+
+  .switch-row { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+  .switch-row input { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+  .switch-row span { font-size: 13px; color: var(--text-primary); }
 </style>

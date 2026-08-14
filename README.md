@@ -41,6 +41,7 @@ Partner (nur dann gibt es Kanalpunkte)
 - [Der schwierige Teil: die Tastenbelegungen](#der-schwierige-teil-die-tastenbelegungen)
 - [Einrichtung](#einrichtung)
 - [Aktionen](#aktionen)
+- [Mit Windows starten](#mit-windows-starten)
 - [Updates](#updates)
 - [Sicherheitsnetze](#sicherheitsnetze)
 - [Wenn nichts passiert](#wenn-nichts-passiert)
@@ -207,6 +208,16 @@ Eigene Aktionen lassen sich über das **+** anlegen: beliebige Taste, Tastenkomb
 Maustaste, Wiederholungen oder eine mehrstufige Abfolge.
 
 ---
+
+## Mit Windows starten
+
+Ein Schalter in den Einstellungen trägt SCTroll in den Autostart ein — unter
+`HKEY_CURRENT_USER`, also ohne Administratorrechte. Bewusst über die Registry statt einer
+Verknüpfung im Autostart-Ordner: der Eintrag enthält den Pfad direkt, es entsteht keine zweite
+Datei, die nach einem Verschieben ins Leere zeigt.
+
+Nach einem Update oder einem verschobenen Ordner wird der Eintrag beim Start automatisch
+nachgezogen.
 
 ## Updates
 
@@ -378,6 +389,8 @@ verändert. Abgedeckt sind unter anderem:
 | `internal/input/input.go` | `SendInput`, Sendeverfahren, Tastennamen |
 | `internal/updater/` | Update-Prüfung, Download, Signaturprüfung, Austausch |
 | `internal/version/` | Programmversion und Versionsvergleich |
+| `internal/autostart/` | Autostart-Eintrag in der Registry |
+| `build/make-icon.ps1` | erzeugt Programmsymbol und `icon.ico` aus Code |
 | `internal/keylock/keylock.go` | Low-Level-Keyboard-Hook |
 | `app.go` | Wails-Bindings fürs Frontend |
 | `frontend/` | Svelte-Oberfläche, Deutsch und Englisch |

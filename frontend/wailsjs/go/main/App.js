@@ -34,6 +34,10 @@ export function GetActions() {
   return window['go']['main']['App']['GetActions']();
 }
 
+export function GetAutostart() {
+  return window['go']['main']['App']['GetAutostart']();
+}
+
 export function GetBindStatus() {
   return window['go']['main']['App']['GetBindStatus']();
 }
@@ -108,6 +112,10 @@ export function IsTwitchConnected() {
 
 export function RemoveSCBinds() {
   return window['go']['main']['App']['RemoveSCBinds']();
+}
+
+export function SetAutostart(arg1) {
+  return window['go']['main']['App']['SetAutostart'](arg1);
 }
 
 export function SetGlobalEnable(arg1) {

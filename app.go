@@ -12,6 +12,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"sctroll/internal/actions"
+	"sctroll/internal/autostart"
 	"sctroll/internal/config"
 	"sctroll/internal/debuglog"
 	"sctroll/internal/input"
@@ -62,6 +63,10 @@ func (a *App) startup(ctx context.Context) {
 
 	// Reste eines vorherigen Updates wegräumen, solange nichts anderes läuft.
 	updater.CleanupOld()
+
+	// Nach einem Update oder einem verschobenen Ordner zeigt ein bestehender
+	// Autostart-Eintrag womöglich ins Leere.
+	autostart.Refresh()
 
 	// Alte Twitch-App ablösen. Die Rewards der alten App sind für die neue nicht
 	// mehr verwaltbar, deshalb müssen auch die Verknüpfungen weg -- sonst hält
@@ -1135,6 +1140,24 @@ func (a *App) RemoveSCBinds() (int, error) {
 	runtime.EventsEmit(a.ctx, "twitch-log",
 		fmt.Sprintf("%d von sctroll gesetzte Belegungen entfernt — Standardbelegung gilt wieder", removed))
 	return removed, nil
+}
+
+// --- Autostart ---
+
+// GetAutostart meldet, ob SCTroll beim Anmelden mitstartet.
+func (a *App) GetAutostart() bool { return autostart.Enabled() }
+
+// SetAutostart schaltet den Windows-Autostart ein oder aus.
+func (a *App) SetAutostart(enabled bool) error {
+	if err := autostart.Set(enabled); err != nil {
+		debuglog.Log("SetAutostart(%v): %s", enabled, err)
+		return err
+	}
+	runtime.EventsEmit(a.ctx, "twitch-log", map[bool]string{
+		true:  "Autostart eingeschaltet — SCTroll startet künftig beim Anmelden mit",
+		false: "Autostart ausgeschaltet",
+	}[enabled])
+	return nil
 }
 
 // --- Selbstaktualisierung ---

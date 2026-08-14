@@ -3,8 +3,7 @@
   import {
     StartTwitchAuth, ConnectTwitch,
     DisconnectTwitch, IsTwitchConnected, GetTwitchChannel,
-    SyncRewards, DeleteAllRewards,
-    GetTwitchApp, SetTwitchApp
+    SyncRewards, DeleteAllRewards
   } from '../../wailsjs/go/main/App'
   import { EventsOn, BrowserOpenURL } from '../../wailsjs/runtime/runtime'
   import { i18n } from '../i18n'
@@ -17,45 +16,17 @@
   let logs = []
   let unsubscribers = []
 
-  // Eigene Twitch-App
-  let showApp = false
-  let clientID = ''
-  let clientSecret = ''
-  let hasSecret = false
-  let isDefaultApp = true
-  let appStatus = ''
+  // Nur relevant, wenn jemand in der config.json eine eigene Twitch-App
+  // hinterlegt hat, die als "Confidential" registriert ist. Die mitgelieferte
+  // App ist "Public" und braucht kein Secret.
   let secretWarning = ''
-
-  async function loadApp() {
-    try {
-      const app = await GetTwitchApp()
-      clientID = app.client_id || ''
-      hasSecret = app.has_secret
-      isDefaultApp = app.is_default
-    } catch (e) {}
-  }
-
-  async function saveApp() {
-    appStatus = ''
-    try {
-      await SetTwitchApp(clientID, clientSecret)
-      clientSecret = ''
-      secretWarning = ''
-      await loadApp()
-      appStatus = 'Gespeichert.'
-    } catch (e) {
-      appStatus = 'Fehler: ' + e
-    }
-  }
 
   onMount(async () => {
     connected = await IsTwitchConnected()
     if (connected) channelName = await GetTwitchChannel()
-    await loadApp()
 
     unsubscribers.push(EventsOn('twitch-needs-secret', (msg) => {
       secretWarning = msg
-      showApp = true
     }))
 
     unsubscribers.push(EventsOn('twitch-connected', () => {
@@ -135,10 +106,12 @@
       <strong>Anmeldung hält nicht über Neustarts</strong>
       <p>{secretWarning}</p>
       <p class="warn-hint">
-        Empfohlen: eine eigene App auf
+        Das betrifft nur eigene Twitch-Apps, die in der <code>config.json</code> hinterlegt sind.
+        Die mitgelieferte App ist vom Typ <strong>Public</strong> und braucht kein Secret.
+        Abhilfe: die eigene App auf
         <button class="linklike" on:click={() => BrowserOpenURL('https://dev.twitch.tv/console/apps')}>dev.twitch.tv/console/apps</button>
-        anlegen und dort <em>Client Type</em> auf <strong>Public</strong> stellen. Dann wird
-        gar kein Secret gebraucht. Die Client-ID unten eintragen.
+        ebenfalls auf <em>Client Type: Public</em> stellen — oder den Eintrag
+        <code>twitch.client_id</code> löschen, dann wird wieder die mitgelieferte benutzt.
       </p>
     </div>
   {/if}
@@ -189,46 +162,6 @@
   {#if authStatus}
     <div class="status-bar">{authStatus}</div>
   {/if}
-
-  <div class="section">
-    <button class="disclosure" on:click={() => showApp = !showApp}>
-      {showApp ? '▾' : '▸'} Twitch-App
-      <span class="app-state">{isDefaultApp ? 'mitgeliefert' : 'eigene'}{hasSecret ? ', Secret hinterlegt' : ''}</span>
-    </button>
-
-    {#if showApp}
-      <p class="hint">
-        Standardmäßig benutzt SCTroll eine mitgelieferte App. Wenn die Anmeldung nach ein paar
-        Stunden verlorengeht, ist die App als <em>Confidential</em> registriert und verlangt beim
-        Erneuern ein Secret.
-      </p>
-      <p class="hint">
-        Der saubere Weg: eigene App anlegen mit <em>Client Type</em> = <strong>Public</strong> —
-        die erneuert ohne Secret. OAuth Redirect URL <code>http://localhost</code> ist Pflichtfeld,
-        wird aber nicht benutzt.
-      </p>
-
-      <label class="field">
-        <span>Client-ID</span>
-        <input type="text" bind:value={clientID} placeholder="leer lassen für die mitgelieferte App" spellcheck="false" />
-      </label>
-      <label class="field">
-        <span>Client Secret <em>(nur bei Confidential-Apps)</em></span>
-        <input type="password" bind:value={clientSecret}
-               placeholder={hasSecret ? '•••••••• (hinterlegt, zum Ändern neu eingeben)' : 'leer lassen bei Public-Apps'}
-               spellcheck="false" autocomplete="off" />
-      </label>
-
-      <div class="button-row">
-        <button class="btn accent" on:click={saveApp}>Speichern</button>
-      </div>
-      {#if appStatus}<p class="app-status" class:error={appStatus.startsWith('Fehler')}>{appStatus}</p>{/if}
-      <p class="hint muted">
-        Achtung: Ein Wechsel der Client-ID setzt die Anmeldung zurück, und bereits angelegte
-        Rewards lassen sich danach nicht mehr verwalten — sie müssen neu erstellt werden.
-      </p>
-    {/if}
-  </div>
 
   {#if logs.length > 0}
     <div class="log-section">
@@ -417,40 +350,9 @@
     font: inherit; text-decoration: underline;
   }
 
-  .disclosure {
-    background: none; border: none; padding: 0;
-    color: var(--text-primary); cursor: pointer;
-    font-family: var(--font-display);
-    font-size: 13px; font-weight: 600; letter-spacing: 0.08em;
-    text-transform: uppercase;
-  }
-  .app-state {
-    margin-left: 8px;
-    font-size: 10px; letter-spacing: 0.12em;
-    color: var(--text-muted); text-transform: none;
-  }
-
-  .field { display: block; margin-top: 12px; }
-  .field span {
-    display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;
-  }
-  .field span em { color: var(--text-muted); font-style: normal; }
-  .field input {
-    width: 100%; padding: 8px 12px;
-    background: var(--bg-input); border: 1px solid var(--border);
-    color: var(--text-primary); border-radius: var(--radius-sm);
-    font-family: var(--font-mono); font-size: 12px;
-  }
-  .field input:focus {
-    outline: none; border-color: rgba(124, 197, 209, 0.5);
-  }
-
   .hint { font-size: 12px; color: var(--text-secondary); margin-top: 10px; line-height: 1.6; }
-  .hint.muted { color: var(--text-muted); font-style: italic; }
-  .hint code {
+  .warn-box code {
     font-family: var(--font-mono); font-size: 11px;
     background: var(--bg-input); padding: 1px 5px; border-radius: 2px;
   }
-  .app-status { margin-top: 10px; font-size: 12px; color: var(--success); font-weight: 600; }
-  .app-status.error { color: var(--danger); }
 </style>

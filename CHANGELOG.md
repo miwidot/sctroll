@@ -1,5 +1,35 @@
 # Changelog
 
+## 1.0.12
+
+### Eigenes Programmsymbol
+
+Bisher lief noch das Symbol des Tarkov-Vorläufers mit. Das neue zeigt eine abgeschrägte
+Tastenkappe mit Blitz — Zuschauer lösen per Tastendruck etwas aus — in derselben Formensprache
+wie die Oberfläche.
+
+Erzeugt wird es aus Code (`build/make-icon.ps1`), damit es reproduzierbar bleibt: vierfach
+vergrößert gezeichnet und heruntergerechnet, sonst fransen die schrägen Kanten aus. Sieben
+Größen von 16 bis 256 px, wobei die kleinen die Kachel stärker ausfüllen und einen kräftigeren
+Blitz bekommen — sonst verschwindet die Form zwischen Rand und Fase.
+
+### Mit Windows starten
+
+Neuer Schalter in den Einstellungen. Eintrag unter `HKEY_CURRENT_USER`, also ohne
+Administratorrechte, und über die Registry statt einer Verknüpfung im Autostart-Ordner — so
+entsteht keine zweite Datei, die nach einem Verschieben ins Leere zeigt.
+
+Nach einem Update oder einem verschobenen Ordner wird ein bestehender Eintrag beim Start
+automatisch auf die aktuelle Programmdatei nachgezogen. Zeigt er auf etwas anderes, gilt der
+Autostart als aus, statt „an" zu melden und beim Anmelden nichts zu tun.
+
+### Twitch-App-Abschnitt entfernt
+
+Die Felder für Client-ID und Secret sind aus der Oberfläche verschwunden. Seit die
+mitgelieferte App vom Typ „Public" ist, braucht sie niemand mehr. Wer eine eigene App benutzen
+will, trägt sie weiterhin in der `config.json` ein; der Hinweis bei fehlendem Secret bleibt und
+erklärt jetzt den Weg dorthin.
+
 ## 1.0.11
 
 **Das Selbstupdate aus 1.0.7 konnte nicht funktionieren.** Es brach mit „SCTroll läuft
