@@ -2,14 +2,13 @@
 package version
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
 )
 
 // Current ist die Version dieses Builds. Muss zur productVersion in wails.json
 // und zum Release-Tag auf GitHub passen -- ein Test wacht darueber.
-const Current = "1.0.10"
+const Current = "1.0.11"
 
 // Repo ist das GitHub-Repository, in dem nach neuen Versionen gesucht wird.
 const Repo = "miwidot/sctroll"
@@ -53,9 +52,4 @@ func parse(v string) [3]int {
 		out[i] = n
 	}
 	return out
-}
-
-// AssetName ist der Dateiname, unter dem eine Version veroeffentlicht wird.
-func AssetName(v string) string {
-	return fmt.Sprintf("SCTroll-%s-windows-amd64.exe", strings.TrimPrefix(v, "v"))
 }

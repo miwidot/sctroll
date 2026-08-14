@@ -67,9 +67,3 @@ func TestVersionMatchesWailsConfig(t *testing.T) {
 			cfg.Info.ProductVersion, Current)
 	}
 }
-
-func TestAssetName(t *testing.T) {
-	if got := AssetName("v1.0.8"); got != "SCTroll-1.0.8-windows-amd64.exe" {
-		t.Errorf("AssetName = %q", got)
-	}
-}

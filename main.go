@@ -4,23 +4,32 @@ import (
 	"embed"
 	"os"
 	"syscall"
+	"time"
 	"unsafe"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+
+	"sctroll/internal/updater"
 )
 
 //go:embed all:frontend/dist
 var assets embed.FS
 
 func main() {
-	// Single instance check via named mutex
-	kernel32 := syscall.NewLazyDLL("kernel32.dll")
-	createMutex := kernel32.NewProc("CreateMutexW")
-	name, _ := syscall.UTF16PtrFromString("Global\\SCTroll_SingleInstance")
-	handle, _, err := createMutex.Call(0, 0, uintptr(unsafe.Pointer(name)))
-	if handle == 0 || err == syscall.Errno(183) { // ERROR_ALREADY_EXISTS
+	// Nach einem Selbstupdate läuft die alte Instanz noch einen Moment weiter.
+	// Dann etwas warten, statt sofort "läuft bereits" zu melden -- sonst bliebe
+	// nach dem Update gar nichts laufen.
+	wait := time.Duration(0)
+	for _, arg := range os.Args[1:] {
+		if arg == updater.UpdatedFlag {
+			wait = 15 * time.Second
+			break
+		}
+	}
+
+	if !acquireSingleInstance(wait) {
 		user32 := syscall.NewLazyDLL("user32.dll")
 		msgBox := user32.NewProc("MessageBoxW")
 		title, _ := syscall.UTF16PtrFromString("SCTroll")
@@ -28,11 +37,11 @@ func main() {
 		msgBox.Call(0, uintptr(unsafe.Pointer(msg)), uintptr(unsafe.Pointer(title)), 0x30) // MB_ICONWARNING
 		os.Exit(0)
 	}
-	defer syscall.CloseHandle(syscall.Handle(handle))
+	defer releaseSingleInstance()
 
 	app := NewApp()
 
-	err = wails.Run(&options.App{
+	err := wails.Run(&options.App{
 		Title:  "SCTroll",
 		Width:  1100,
 		Height: 750,

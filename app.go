@@ -1187,8 +1187,15 @@ func (a *App) InstallUpdate() error {
 	}
 	_ = a.cfg.Save()
 
+	// Einzelinstanz-Sperre freigeben, bevor der Nachfolger startet. Sonst
+	// meldet der "SCTroll läuft bereits" und beendet sich, während diese
+	// Instanz gleich darauf ebenfalls endet -- am Ende liefe nichts mehr.
+	releaseSingleInstance()
+
 	if err := updater.Apply(path); err != nil {
 		debuglog.Log("InstallUpdate: %s", err)
+		// Sperre wieder übernehmen, das Programm läuft ja weiter.
+		acquireSingleInstance(0)
 		return err
 	}
 

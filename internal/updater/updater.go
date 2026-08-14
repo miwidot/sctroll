@@ -53,13 +53,16 @@ type ghRelease struct {
 
 var client = &http.Client{Timeout: 30 * time.Second}
 
+// releaseAPI ist die Abfrage der neuesten Veroeffentlichung.
+// Als Variable, damit Tests sie auf einen lokalen Stub zeigen lassen koennen.
+var releaseAPI = "https://api.github.com/repos/" + version.Repo + "/releases/latest"
+
 // Check fragt die neueste Veroeffentlichung ab.
 //
 // Ohne Anmeldung erlaubt GitHub 60 Anfragen pro Stunde und IP -- fuer eine
 // Pruefung beim Start und gelegentlich von Hand reicht das bei weitem.
 func Check() (*Release, error) {
-	req, err := http.NewRequest("GET",
-		"https://api.github.com/repos/"+version.Repo+"/releases/latest", nil)
+	req, err := http.NewRequest("GET", releaseAPI, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -156,6 +159,11 @@ func Download(rel *Release, progress func(float64)) (string, error) {
 	return target, nil
 }
 
+// UpdatedFlag bekommt der Nachfolger beim Start mit. Daran erkennt er, dass die
+// Vorgaengerinstanz noch einen Moment laeuft, und wartet auf die Einzelinstanz-
+// Sperre, statt sich mit "laeuft bereits" zu beenden.
+const UpdatedFlag = "--updated"
+
 // Apply tauscht die laufende Programmdatei aus und startet die neue Version.
 //
 // Windows laesst eine laufende Exe nicht ueberschreiben, wohl aber umbenennen.
@@ -184,7 +192,7 @@ func Apply(newExe string) error {
 	}
 
 	debuglog.Log("updater: ausgetauscht, starte %s neu", exe)
-	cmd := exec.Command(exe)
+	cmd := exec.Command(exe, UpdatedFlag)
 	cmd.Dir = filepath.Dir(exe)
 	return cmd.Start()
 }

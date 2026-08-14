@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.0.11
+
+**Das Selbstupdate aus 1.0.7 konnte nicht funktionieren.** Es brach mit „SCTroll läuft
+bereits!" ab.
+
+Beim Update wird die neue Programmdatei gestartet, während die alte noch läuft — die beendet
+sich erst kurz danach. Der Nachfolger traf also auf die Einzelinstanz-Sperre der Vorgängerin,
+meldete pflichtgemäß „läuft bereits" und beendete sich. Kurz darauf endete auch die alte
+Instanz planmäßig. Ergebnis: Datei ausgetauscht, aber nichts lief mehr.
+
+Zweifach abgesichert:
+
+- Die alte Instanz **gibt die Sperre frei**, bevor sie den Nachfolger startet. Schlägt der
+  Austausch fehl, übernimmt sie die Sperre wieder — das Programm läuft ja weiter.
+- Der Nachfolger bekommt beim Start `--updated` mit und **wartet bis zu 15 Sekunden** auf die
+  Sperre, statt sofort abzubrechen. Ein normaler Doppelstart wird weiterhin sofort abgewiesen.
+
+Geprüft: zweiter Start ohne Kennzeichen wird abgewiesen; mit Kennzeichen wartet er, und sobald
+die Vorgängerin endet, übernimmt er und öffnet sein Fenster.
+
 ## 1.0.10
 
 Aus dem Log von 1.0.9 aufgefallen: rund ein Dutzend gespeicherter Reward-IDs zeigten auf
