@@ -95,8 +95,15 @@
   }
 
   async function toggle(action) {
-    await ToggleAction(action.id, !action.enabled)
-    await loadActions()
+    // Neu laden in jedem Fall: scheitert der Aufruf, bliebe der Schalter sonst
+    // im alten Zustand stehen und man hielte ihn für kaputt.
+    try {
+      await ToggleAction(action.id, !action.enabled)
+    } catch (e) {
+      console.error('ToggleAction:', e)
+    } finally {
+      await loadActions()
+    }
   }
 
   async function enableAll() {

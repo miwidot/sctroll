@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.0.9
+
+Das An- und Ausschalten einzelner Aktionen wirkte wirkungslos, ohne dass irgendwo etwas dazu
+stand. Drei Ursachen:
+
+- **Ohne Twitch-Verbindung wurde gar nichts protokolliert.** Der Log-Aufruf lag innerhalb der
+  Bedingung „Twitch verbunden" — man konnte nicht einmal sehen, ob der Klick angekommen war.
+  Jetzt wird jeder Umschaltvorgang festgehalten, samt Verbindungszustand und Reward-ID.
+- **Fehler beim Anlegen eines Rewards wurden verschluckt** (`if err == nil`). Betrifft
+  besonders Rewards, die gleichnamig schon einer anderen App gehören: der Schalter ging an,
+  auf Twitch entstand nichts, und niemand erfuhr davon. Jetzt kommt die Meldung mit der
+  nötigen Handlung.
+- **Der Schalterzustand wird zuerst gespeichert**, unabhängig davon, ob Twitch gerade
+  erreichbar ist. Probleme auf Twitch-Seite werden gemeldet, führen aber nicht mehr dazu, dass
+  der Schalter zurückspringt.
+
+Dazu lädt die Oberfläche die Aktionsliste jetzt in jedem Fall neu. Vorher verhinderte ein
+Fehler das Neuladen, und der Schalter sprang optisch zurück — was aussah, als sei er kaputt.
+
 ## 1.0.8
 
 Im Live-Betrieb aufgefallen: Einlösungen liefen ins Leere, ohne dass irgendwo etwas dazu stand.

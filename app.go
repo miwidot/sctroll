@@ -270,33 +270,82 @@ func (a *App) DeleteAction(id string) error {
 	return a.cfg.Save()
 }
 
+// ToggleAction schaltet eine Aktion an oder aus und zieht den Reward auf Twitch
+// nach.
+//
+// Der Schalter selbst wird immer gespeichert, auch wenn es auf Twitch hakt --
+// sonst springt er in der Oberflaeche zurueck und man weiss nicht, woran es lag.
+// Probleme auf Twitch-Seite kommen als Meldung, nicht als Fehler.
 func (a *App) ToggleAction(id string, enabled bool) error {
 	a.cfg.ToggleAction(id, enabled)
 
-	actns := a.cfg.GetActions()
-	for _, act := range actns {
-		if act.ID == id && a.twClient != nil && a.twClient.IsConnected() {
-			if act.RewardID != "" {
-				// Reward auf Twitch aktivieren/deaktivieren (pausieren)
-				debuglog.Log("ToggleAction: %s enabled=%v rewardID=%s", id, enabled, act.RewardID)
-				if err := a.twClient.UpdateRewardEnabled(act.RewardID, enabled, act.RewardColor); err != nil {
-					debuglog.Log("ToggleAction: UpdateRewardEnabled error: %s", err)
-				}
-			} else if enabled {
-				// Kein Reward vorhanden, neu erstellen
-				twCooldown := act.Cooldown
-				if act.TwitchCooldown > 0 {
-					twCooldown = act.TwitchCooldown * 1000
-				}
-				rewardID, err := a.twClient.CreateReward(act.RewardTitle, act.RewardCost, twCooldown, act.RewardColor)
-				if err == nil {
-					act.RewardID = rewardID
-					a.cfg.SetAction(act)
-				}
-			}
+	var target *config.Action
+	for _, act := range a.cfg.GetActions() {
+		if act.ID == id {
+			target = &act
+			break
 		}
 	}
+	if target == nil {
+		return fmt.Errorf("Aktion nicht gefunden: %s", id)
+	}
 
+	connected := a.twClient != nil && a.twClient.IsConnected()
+	debuglog.Log("ToggleAction: %s enabled=%v rewardID=%q twitch=%v",
+		id, enabled, target.RewardID, connected)
+
+	// Zuerst sichern: der Zustand des Schalters haengt nicht davon ab, ob
+	// Twitch gerade erreichbar ist.
+	if err := a.cfg.Save(); err != nil {
+		return err
+	}
+
+	if !connected {
+		runtime.EventsEmit(a.ctx, "twitch-log", fmt.Sprintf(
+			"%q %s — Twitch ist nicht verbunden, der Reward wird beim nächsten Verbinden nachgezogen",
+			target.Name, map[bool]string{true: "aktiviert", false: "deaktiviert"}[enabled]))
+		return nil
+	}
+
+	if target.RewardID != "" {
+		// Vorhandenen Reward auf Twitch pausieren beziehungsweise freigeben.
+		if err := a.twClient.UpdateRewardEnabled(target.RewardID, enabled, target.RewardColor); err != nil {
+			debuglog.Log("ToggleAction: UpdateRewardEnabled fehlgeschlagen: %s", err)
+			runtime.EventsEmit(a.ctx, "twitch-log", fmt.Sprintf(
+				"%q konnte auf Twitch nicht umgeschaltet werden: %s", target.Name, err))
+		}
+		return nil
+	}
+
+	if !enabled {
+		return nil // nichts anzulegen
+	}
+
+	// Noch kein Reward auf dem Kanal: anlegen.
+	twCooldown := target.Cooldown
+	if target.TwitchCooldown > 0 {
+		twCooldown = target.TwitchCooldown * 1000
+	}
+	rewardID, err := a.twClient.CreateReward(target.RewardTitle, target.RewardCost, twCooldown, target.RewardColor)
+	if err != nil {
+		// Bisher wurde dieser Fehler verschluckt: der Schalter ging an, auf
+		// Twitch entstand nichts, und niemand erfuhr davon.
+		debuglog.Log("ToggleAction: CreateReward für %s fehlgeschlagen: %s", id, err)
+		msg := fmt.Sprintf("Reward %q konnte nicht angelegt werden: %s", target.RewardTitle, err)
+		if errors.Is(err, twitch.ErrRewardExists) {
+			msg = fmt.Sprintf(
+				"%q existiert schon auf deinem Kanal, gehört aber einer anderen App. "+
+					"Einlösungen darauf lösen nichts aus — im Twitch-Dashboard löschen, dann erneut aktivieren",
+				target.RewardTitle)
+		}
+		runtime.EventsEmit(a.ctx, "twitch-log", msg)
+		runtime.EventsEmit(a.ctx, "action-error", map[string]string{"action": id, "error": msg})
+		return nil
+	}
+
+	target.RewardID = rewardID
+	a.cfg.SetAction(*target)
+	debuglog.Log("ToggleAction: %s Reward angelegt → %s", id, rewardID)
 	return a.cfg.Save()
 }
 
