@@ -350,11 +350,17 @@ func (a *App) ToggleAction(id string, enabled bool) error {
 		// Twitch entstand nichts, und niemand erfuhr davon.
 		debuglog.Log("ToggleAction: CreateReward für %s fehlgeschlagen: %s", id, err)
 		msg := fmt.Sprintf("Reward %q konnte nicht angelegt werden: %s", target.RewardTitle, err)
-		if errors.Is(err, twitch.ErrRewardExists) {
+		switch {
+		case errors.Is(err, twitch.ErrRewardExists):
 			msg = fmt.Sprintf(
 				"%q existiert schon auf deinem Kanal, gehört aber einer anderen App. "+
 					"Einlösungen darauf lösen nichts aus — im Twitch-Dashboard löschen, dann erneut aktivieren",
 				target.RewardTitle)
+		case errors.Is(err, twitch.ErrTooManyRewards):
+			msg = fmt.Sprintf(
+				"%q konnte nicht angelegt werden: dein Kanal hat die von Twitch erlaubte Zahl an "+
+					"Kanalpunkt-Belohnungen erreicht. Nicht benötigte Belohnungen im Twitch-Dashboard "+
+					"entfernen oder hier weniger Aktionen aktivieren", target.RewardTitle)
 		}
 		runtime.EventsEmit(a.ctx, "twitch-log", msg)
 		runtime.EventsEmit(a.ctx, "action-error", map[string]string{"action": id, "error": msg})
@@ -367,28 +373,70 @@ func (a *App) ToggleAction(id string, enabled bool) error {
 	return a.cfg.Save()
 }
 
+// SetGlobalEnable ist der Not-Aus: er blendet alle Rewards auf dem Kanal aus
+// beziehungsweise wieder ein.
+//
+// Frueher wurden die Rewards dabei geloescht und beim Einschalten neu angelegt.
+// Das war aus drei Gruenden schlecht: es kostet pro Umschaltung ein Dutzend
+// API-Aufrufe, es verwirft Bild, Farbe und Reihenfolge der Belohnungen auf dem
+// Kanal, und beim Neuanlegen kann es an Twitchs Obergrenze scheitern -- dann
+// waeren die Rewards weg und liessen sich nicht zurueckholen.
+//
+// Twitch kann Belohnungen ausblenden (is_enabled), genau dafuer ist das da.
 func (a *App) SetGlobalEnable(enabled bool) error {
 	a.cfg.GlobalEnable = enabled
 	runtime.EventsEmit(a.ctx, "global-toggle", enabled)
 
-	// AUS = Rewards löschen, AN = Rewards neu erstellen
 	if a.twClient != nil && a.twClient.IsConnected() {
 		go func() {
 			if enabled {
-				// Rewards neu erstellen
-				runtime.EventsEmit(a.ctx, "twitch-log", "Erstelle Rewards auf Twitch...")
-				a.SyncRewards()
-				runtime.EventsEmit(a.ctx, "twitch-log", "Rewards erstellt")
+				// Fehlende Rewards anlegen -- vorhandene bleiben unangetastet.
+				runtime.EventsEmit(a.ctx, "twitch-log", "Rewards werden freigegeben...")
+				_ = a.SyncRewards()
 			} else {
-				// Rewards löschen
-				runtime.EventsEmit(a.ctx, "twitch-log", "Lösche Rewards von Twitch...")
-				a.DeleteAllRewards()
-				runtime.EventsEmit(a.ctx, "twitch-log", "Rewards gelöscht")
+				runtime.EventsEmit(a.ctx, "twitch-log", "Rewards werden ausgeblendet...")
+			}
+
+			shown, hidden := a.applyRewardVisibility(enabled)
+			if enabled {
+				runtime.EventsEmit(a.ctx, "twitch-log",
+					fmt.Sprintf("%d Reward(s) sind wieder auf dem Kanal sichtbar", shown))
+			} else {
+				runtime.EventsEmit(a.ctx, "twitch-log",
+					fmt.Sprintf("%d Reward(s) ausgeblendet — Einlösungen sind gesperrt", hidden))
 			}
 		}()
 	}
 
 	return a.cfg.Save()
+}
+
+// applyRewardVisibility blendet die Rewards passend zum Not-Aus und zum
+// Zustand der einzelnen Aktionen ein oder aus.
+func (a *App) applyRewardVisibility(globalEnabled bool) (shown, hidden int) {
+	for _, act := range a.cfg.GetActions() {
+		if act.RewardID == "" {
+			continue
+		}
+		want := globalEnabled && act.Enabled
+
+		if err := a.twClient.UpdateRewardEnabled(act.RewardID, want, act.RewardColor); err != nil {
+			debuglog.Log("applyRewardVisibility: %s (%s): %s", act.ID, act.RewardID, err)
+			// Veraltete Verknüpfung: beim nächsten Aktivieren wird neu angelegt.
+			if errors.Is(err, twitch.ErrRewardNotFound) {
+				act.RewardID = ""
+				a.cfg.SetAction(act)
+			}
+			continue
+		}
+		if want {
+			shown++
+		} else {
+			hidden++
+		}
+	}
+	_ = a.cfg.Save()
+	return shown, hidden
 }
 
 func (a *App) GetGlobalEnable() bool {
@@ -830,6 +878,16 @@ func (a *App) SyncRewards() error {
 					"%q existiert schon auf deinem Kanal, gehört aber einer anderen App — "+
 						"bitte im Twitch-Dashboard löschen und erneut synchronisieren", action.RewardTitle))
 				continue
+			}
+
+			// Obergrenze erreicht: alle weiteren Versuche scheitern genauso.
+			// Einmal deutlich melden und aufhören, statt es 20-mal zu probieren.
+			if errors.Is(err, twitch.ErrTooManyRewards) {
+				runtime.EventsEmit(a.ctx, "twitch-log",
+					"Dein Kanal hat die von Twitch erlaubte Zahl an Kanalpunkt-Belohnungen erreicht. "+
+						"Nicht benötigte im Twitch-Dashboard entfernen oder hier weniger Aktionen aktivieren — "+
+						"die restlichen Rewards wurden nicht angelegt.")
+				break
 			}
 
 			runtime.EventsEmit(a.ctx, "twitch-log",

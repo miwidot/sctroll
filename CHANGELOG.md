@@ -1,5 +1,38 @@
 # Changelog
 
+## 1.0.13
+
+Aus dem Log eines anderen Nutzers.
+
+### Not-Aus blendet Rewards aus, statt sie zu löschen
+
+Der Globalschalter hat bei „Aus" **alle Rewards vom Kanal gelöscht** und bei „An" neu angelegt.
+Im Log waren das 134 Erstellungen und 111 Löschungen an drei Tagen.
+
+Das war aus drei Gründen falsch: es kostet pro Umschaltung ein Dutzend API-Aufrufe, es verwirft
+Bild, Farbe und Reihenfolge der Belohnungen auf dem Kanal, und beim Wiederanlegen kann es an
+Twitchs Obergrenze scheitern — dann wären die Rewards weg und ließen sich nicht zurückholen.
+
+Twitch kann Belohnungen ausblenden (`is_enabled`), genau dafür ist das gedacht. Der Not-Aus
+benutzt jetzt das. Der Knopf *Alle Rewards löschen* bleibt als bewusste Handlung erhalten.
+
+### Obergrenze für Kanalpunkt-Belohnungen
+
+Twitch begrenzt die Zahl eigener Belohnungen pro Kanal. Ist sie erreicht, antwortete die API
+mit `TOO_MANY_REWARDS`, und SCTroll zeigte die rohe Fehlermeldung — 13-mal hintereinander, für
+jede weitere Aktion erneut.
+
+Der Fall wird jetzt erkannt (`ErrTooManyRewards`), im Klartext erklärt, und das Synchronisieren
+bricht danach ab, statt es für jede weitere Aktion zu wiederholen.
+
+### Bestätigt
+
+Der Fehler beim Selbstupdate aus 1.0.11 ließ sich im Log nachvollziehen: der Nachfolger startete
+um 14:02:43.216 und war 456 ms später wieder weg, der Nutzer startete 70 Sekunden später von
+Hand. Seit 1.0.11 behoben.
+
+Ebenfalls im Log: 48 Tastendrücke, alle angenommen, keiner blockiert — auf einem fremden Rechner.
+
 ## 1.0.12
 
 ### Eigenes Programmsymbol

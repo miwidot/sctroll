@@ -398,8 +398,12 @@ func (c *Client) CreateReward(title string, cost int, cooldownMs int, color stri
 		// Ein gleichnamiger Reward existiert schon auf dem Kanal, gehoert aber
 		// nicht dieser App -- typischerweise ein Rest einer frueheren
 		// App-Registrierung. Twitch laesst ihn weder anlegen noch verwalten.
-		if strings.Contains(strings.ToUpper(string(respBody)), "DUPLICATE_REWARD") {
+		upper := strings.ToUpper(string(respBody))
+		if strings.Contains(upper, "DUPLICATE_REWARD") {
 			return "", fmt.Errorf("%w: %q", ErrRewardExists, title)
+		}
+		if strings.Contains(upper, "TOO_MANY_REWARDS") {
+			return "", ErrTooManyRewards
 		}
 		return "", fmt.Errorf("failed to create reward (status %d): %s", resp.StatusCode, string(respBody))
 	}
@@ -781,6 +785,13 @@ var ErrRewardExists = errors.New("Reward mit diesem Titel existiert bereits auf 
 // Verknuepfung ist dann veraltet und muss verworfen werden, sonst bleibt die
 // Aktion dauerhaft ohne Reward und laesst sich nie wieder ausloesen.
 var ErrRewardNotFound = errors.New("Reward existiert auf Twitch nicht mehr")
+
+// ErrTooManyRewards heisst: der Kanal hat die von Twitch erlaubte Zahl eigener
+// Kanalpunkt-Belohnungen erreicht.
+//
+// Betrifft alle Belohnungen des Kanals, nicht nur die von SCTroll. Wer viele
+// eigene angelegt hat, kann nicht alle Aktionen gleichzeitig aktivieren.
+var ErrTooManyRewards = errors.New("Twitch erlaubt keine weiteren Kanalpunkt-Belohnungen auf diesem Kanal")
 
 var ErrClientSecretRequired = errors.New(
 	"Twitch-App verlangt ein Client Secret zum Erneuern. Entweder den Client Type der App " +

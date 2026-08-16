@@ -332,6 +332,33 @@ func TestUpdateRewardKeepsOtherErrorsDistinct(t *testing.T) {
 	}
 }
 
+// Twitch begrenzt die Zahl der Kanalpunkt-Belohnungen pro Kanal. Wer viele
+// eigene hat, kann nicht alle Aktionen aktivieren -- das muss als eigener Fall
+// erkennbar sein, sonst steht in der Oberfläche nur eine rohe API-Antwort.
+func TestCreateRewardDetectsChannelLimit(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(400)
+		_, _ = w.Write([]byte(`{"error":"Bad Request","status":400,` +
+			`"message":"CREATE_CUSTOM_REWARD_TOO_MANY_REWARDS"}`))
+	}))
+	defer srv.Close()
+	old := twitchAPIURL
+	twitchAPIURL = srv.URL
+	defer func() { twitchAPIURL = old }()
+
+	c := testClient(&config.TwitchConfig{AccessToken: "a", RefreshToken: "r",
+		ExpiresAt: time.Now().Add(time.Hour), BroadcasterID: "1"})
+
+	_, err := c.CreateReward("Taunt!", 300, 30000, "")
+	if !errors.Is(err, ErrTooManyRewards) {
+		t.Fatalf("erwartet ErrTooManyRewards, bekam %v", err)
+	}
+	if errors.Is(err, ErrRewardExists) {
+		t.Error("darf nicht als doppelter Reward gelten")
+	}
+}
+
 func TestHasLoginIgnoresAccessToken(t *testing.T) {
 	// Access Token abgelaufen und geleert, Refresh Token vorhanden:
 	// das ist eine gültige gespeicherte Anmeldung.
