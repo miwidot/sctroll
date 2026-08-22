@@ -8,6 +8,11 @@ Twitch zeigt zu jeder Belohnung einen Beschreibungstext an. Bisher stand dort be
 derselbe Platzhalter. Jetzt wird die **Beschreibung der Aktion** dorthin übernommen — der
 Zuschauer sieht also beim Einlösen, was er anrichtet.
 
+Alle mitgelieferten Beschreibungen wurden dafür neu geschrieben — aus Zuschauersicht statt als
+technische Notiz. In acht standen noch Einrichtungshinweise wie „im Spiel ab Werk unbelegt“,
+die jeder Zuschauer zu sehen bekommen hätte; bestehende Konfigurationen werden davon bereinigt,
+selbst geschriebene Texte bleiben unangetastet.
+
 Gilt auch für bereits angelegte Rewards: beim nächsten Synchronisieren wird die Beschreibung
 nachgetragen. Twitch begrenzt den Text, längere Beschreibungen werden gekürzt statt den Aufruf
 scheitern zu lassen.

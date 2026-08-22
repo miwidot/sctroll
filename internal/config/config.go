@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -131,22 +132,22 @@ type Config struct {
 // der actionmaps.xml. Sie sind deshalb standardmaessig aus.
 var defaultActions = []Action{
 	// --- Schiff ---
-	{ID: "doors", Name: "Türen auf/zu", Description: "Schaltet alle Schiffstüren um (im Spiel ab Werk unbelegt)", Enabled: false,
+	{ID: "doors", Name: "Türen auf/zu", Description: "Öffnet oder schließt alle Türen am Schiff.", Enabled: false,
 		RewardTitle: "Türen auf/zu!", RewardCost: 300, Key: "", HoldMs: 80,
 		Cooldown: 30000, Category: "ship", SCActionMap: "spaceship_general", SCAction: "v_toggle_all_doors"},
-	{ID: "doorlocks", Name: "Türschlösser", Description: "Ver- und entriegelt alle Türen (im Spiel ab Werk unbelegt)", Enabled: false,
+	{ID: "doorlocks", Name: "Türschlösser", Description: "Ver- oder entriegelt alle Türen am Schiff.", Enabled: false,
 		RewardTitle: "Türschlösser!", RewardCost: 400, Key: "", HoldMs: 80,
 		Cooldown: 60000, Category: "ship", SCActionMap: "spaceship_general", SCAction: "v_toggle_all_doorlocks"},
-	{ID: "lights", Name: "Schiffslichter", Description: "Schaltet die Außenbeleuchtung um", Enabled: true,
+	{ID: "lights", Name: "Schiffslichter", Description: "Schaltet die Außenbeleuchtung des Schiffs an oder aus.", Enabled: true,
 		RewardTitle: "Licht an/aus!", RewardCost: 150, Key: "l", HoldMs: 80,
 		Cooldown: 20000, Category: "ship", SCActionMap: "lights_controller", SCAction: "v_lights"},
-	{ID: "landing_gear", Name: "Fahrwerk", Description: "Fährt das Landegestell aus oder ein", Enabled: true,
+	{ID: "landing_gear", Name: "Fahrwerk", Description: "Fährt das Landegestell aus oder ein — auch mitten im Flug.", Enabled: true,
 		RewardTitle: "Fahrwerk!", RewardCost: 250, Key: "n", HoldMs: 80,
 		Cooldown: 30000, Category: "ship", SCActionMap: "spaceship_movement", SCAction: "v_toggle_landing_system"},
-	{ID: "vtol", Name: "VTOL umschalten", Description: "Klappt die VTOL-Triebwerke um", Enabled: false,
+	{ID: "vtol", Name: "VTOL umschalten", Description: "Klappt die VTOL-Triebwerke um.", Enabled: false,
 		RewardTitle: "VTOL!", RewardCost: 500, Key: "k", HoldMs: 80,
 		Cooldown: 60000, Category: "ship", SCActionMap: "spaceship_movement", SCAction: "v_vtol_toggle"},
-	{ID: "flightready", Name: "Flight Ready", Description: "Startet oder stoppt die Systeme", Enabled: false,
+	{ID: "flightready", Name: "Flight Ready", Description: "Fährt die Systeme des Schiffs hoch oder runter.", Enabled: false,
 		RewardTitle: "Flight Ready!", RewardCost: 800, Key: "ralt+r", HoldMs: 80,
 		Cooldown: 120000, Category: "ship", SCActionMap: "spaceship_general", SCAction: "v_flightready"},
 
@@ -154,61 +155,61 @@ var defaultActions = []Action{
 	// Master Modes haben die alten Quantum-/SCM-Umschalter abgeloest: kurz B
 	// wechselt den Modus, lang B geht auf NAV/Quantum. Das alte
 	// v_toggle_quantum_mode ist im Spiel unbelegte Altlast.
-	{ID: "master_mode", Name: "Master Mode (NAV/Quantum)", Description: "Langer Druck auf B — wechselt in den NAV-/Quantum-Modus", Enabled: true,
+	{ID: "master_mode", Name: "Master Mode (NAV/Quantum)", Description: "Wechselt in den NAV-/Quantum-Modus. Mitten im Kampf eine schlechte Idee.", Enabled: true,
 		RewardTitle: "NAV-Modus!", RewardCost: 400, Key: "b", HoldMs: 500,
 		Cooldown: 60000, Category: "flight", SCActionMap: "spaceship_movement", SCAction: "v_master_mode_cycle_long"},
-	{ID: "decoupled", Name: "Decoupled Mode", Description: "Schaltet zwischen Coupled und Decoupled", Enabled: true,
+	{ID: "decoupled", Name: "Decoupled Mode", Description: "Entkoppelt die Steuerung — das Schiff driftet weiter, statt von allein abzubremsen.", Enabled: true,
 		RewardTitle: "Decoupled!", RewardCost: 700, Key: "c", HoldMs: 80,
 		Cooldown: 90000, Category: "flight", SCActionMap: "spaceship_movement", SCAction: "v_ifcs_vector_decoupling_toggle"},
-	{ID: "afterburner", Name: "Boost", Description: "Zündet den Nachbrenner", Enabled: false,
+	{ID: "afterburner", Name: "Boost", Description: "Zündet den Nachbrenner.", Enabled: false,
 		RewardTitle: "Boost!", RewardCost: 500, Key: "lshift", HoldMs: 1500,
 		Cooldown: 60000, Category: "flight", SCActionMap: "spaceship_movement", SCAction: "v_afterburner"},
-	{ID: "decoy", Name: "Decoy werfen", Description: "Feuert Täuschkörper ab", Enabled: false,
+	{ID: "decoy", Name: "Decoy werfen", Description: "Feuert Täuschkörper ab.", Enabled: false,
 		RewardTitle: "Decoys raus!", RewardCost: 400, Key: "h", HoldMs: 800, Repeat: 3, RepeatDelayMs: 250,
 		Cooldown: 60000, Category: "flight", SCActionMap: "spaceship_defensive", SCAction: "v_weapon_countermeasure_decoy_launch"},
-	{ID: "gravity_comp", Name: "G-Kompensation", Description: "Gravitationskompensation (im Spiel ab Werk unbelegt)", Enabled: false,
+	{ID: "gravity_comp", Name: "G-Kompensation", Description: "Schaltet die Gravitationskompensation um — das Schiff wird spürbar behäbiger.", Enabled: false,
 		RewardTitle: "G-Comp!", RewardCost: 600, Key: "", HoldMs: 80,
 		Cooldown: 90000, Category: "flight", SCActionMap: "spaceship_movement", SCAction: "v_ifcs_gravity_compensation_toggle"},
 
 	// --- Energie ---
-	{ID: "power_all", Name: "Energie togglen", Description: "Schaltet die gesamte Schiffsenergie um", Enabled: false,
+	{ID: "power_all", Name: "Energie togglen", Description: "Schaltet die gesamte Schiffsenergie an oder aus.", Enabled: false,
 		RewardTitle: "Strom aus!", RewardCost: 3000, Key: "u", HoldMs: 80,
 		Cooldown: 300000, Category: "power", SCActionMap: "spaceship_power", SCAction: "v_power_toggle"},
-	{ID: "thrusters", Name: "Thruster togglen", Description: "Schaltet die Triebwerke an oder aus", Enabled: false,
+	{ID: "thrusters", Name: "Thruster togglen", Description: "Schaltet die Triebwerke an oder aus.", Enabled: false,
 		RewardTitle: "Thruster aus!", RewardCost: 1500, Key: "i", HoldMs: 80,
 		Cooldown: 180000, Category: "power", SCActionMap: "spaceship_power", SCAction: "v_power_toggle_thrusters"},
-	{ID: "shields", Name: "Schilde togglen", Description: "Schaltet die Schilde an oder aus", Enabled: false,
+	{ID: "shields", Name: "Schilde togglen", Description: "Schaltet die Schilde an oder aus.", Enabled: false,
 		RewardTitle: "Schilde aus!", RewardCost: 2000, Key: "o", HoldMs: 80,
 		Cooldown: 180000, Category: "power", SCActionMap: "spaceship_power", SCAction: "v_power_toggle_shields"},
-	{ID: "weapons", Name: "Waffen togglen", Description: "Schaltet die Waffen an oder aus", Enabled: false,
+	{ID: "weapons", Name: "Waffen togglen", Description: "Schaltet die Waffen an oder aus.", Enabled: false,
 		RewardTitle: "Waffen aus!", RewardCost: 2000, Key: "p", HoldMs: 80,
 		Cooldown: 180000, Category: "power", SCActionMap: "spaceship_power", SCAction: "v_power_toggle_weapons"},
 
 	// --- Sicht & Modi ---
-	{ID: "scan_mode", Name: "Scan-Modus", Description: "Schaltet in den Scan-Modus", Enabled: true,
+	{ID: "scan_mode", Name: "Scan-Modus", Description: "Wechselt in den Scan-Modus.", Enabled: true,
 		RewardTitle: "Scan-Modus!", RewardCost: 200, Key: "v", HoldMs: 80,
 		Cooldown: 30000, Category: "view", SCActionMap: "seat_general", SCAction: "v_toggle_scan_mode"},
-	{ID: "look_behind", Name: "Nach hinten schauen", Description: "Dreht die Kamera nach hinten", Enabled: true,
+	{ID: "look_behind", Name: "Nach hinten schauen", Description: "Dreht die Kamera für einen Moment nach hinten.", Enabled: true,
 		RewardTitle: "Umschauen!", RewardCost: 150, Key: "comma", HoldMs: 2000,
 		Cooldown: 20000, Category: "view", SCActionMap: "seat_general", SCAction: "v_view_look_behind"},
 
 	// --- Spieler ---
-	{ID: "helmet", Name: "Helm ab", Description: "Nimmt den Helm ab oder setzt ihn auf", Enabled: true,
+	{ID: "helmet", Name: "Helm ab", Description: "Nimmt den Helm ab oder setzt ihn auf. Im Vakuum eher ungünstig.", Enabled: true,
 		RewardTitle: "Helm ab!", RewardCost: 500, Key: "lalt+h", HoldMs: 80,
 		Cooldown: 60000, Category: "player", SCActionMap: "player", SCAction: "toggleAttachHelmet"},
-	{ID: "flashlight", Name: "Taschenlampe", Description: "Schaltet die Taschenlampe um", Enabled: true,
+	{ID: "flashlight", Name: "Taschenlampe", Description: "Schaltet die Taschenlampe an oder aus.", Enabled: true,
 		RewardTitle: "Taschenlampe!", RewardCost: 100, Key: "t", HoldMs: 80,
 		Cooldown: 15000, Category: "player", SCActionMap: "player", SCAction: "toggle_flashlight"},
-	{ID: "exit_seat", Name: "Aus dem Sitz", Description: "Steht auf bzw. steigt aus (langer Druck)", Enabled: false,
+	{ID: "exit_seat", Name: "Aus dem Sitz", Description: "Lässt den Piloten aufstehen beziehungsweise aussteigen.", Enabled: false,
 		RewardTitle: "Aufstehen!", RewardCost: 2000, Key: "y", HoldMs: 900,
 		Cooldown: 300000, Category: "player", SCActionMap: "default", SCAction: "pl_exit"},
-	{ID: "reload", Name: "Nachladen", Description: "Lädt die Waffe nach — mitten im Gefecht besonders unpraktisch", Enabled: true,
+	{ID: "reload", Name: "Nachladen", Description: "Lädt die Waffe nach — mitten im Gefecht besonders unpraktisch.", Enabled: true,
 		RewardTitle: "Nachladen!", RewardCost: 300, Key: "r", HoldMs: 80,
 		Cooldown: 30000, Category: "player", SCActionMap: "player", SCAction: "reload"},
 	// Zweistufig: G wählt die Granate, die linke Maustaste wirft sie. Gehalten
 	// wird beim Wurf, weil throw_overhand im Spiel eine Halteaktion ist --
 	// je länger, desto weiter fliegt sie.
-	{ID: "grenade", Name: "Granate werfen", Description: "Zieht eine Granate und wirft sie. Nicht im Schiff empfohlen.", Enabled: false,
+	{ID: "grenade", Name: "Granate werfen", Description: "Zieht eine Granate und wirft sie. Im Schiff eine ganz schlechte Idee.", Enabled: false,
 		RewardTitle: "Granate!", RewardCost: 1500, Key: "g", HoldMs: 80,
 		Steps: []ActionStep{
 			{Key: "g", HoldMs: 80},
@@ -216,35 +217,35 @@ var defaultActions = []Action{
 			{Key: "mouse1", HoldMs: 700},
 		},
 		Cooldown: 300000, Category: "player", SCActionMap: "player_choice", SCAction: "pc_qs_grenades"},
-	{ID: "spin360", Name: "360 Spin", Description: "Dreht die Ansicht einmal komplett herum", Enabled: false,
+	{ID: "spin360", Name: "360 Spin", Description: "Dreht die Ansicht einmal komplett im Kreis.", Enabled: false,
 		RewardTitle: "360 Spin!", RewardCost: 400, Key: "spin360", HoldMs: 8000,
 		Cooldown: 30000, Category: "fun"},
 
 	// --- Emotes: im Spiel alle ab Werk unbelegt ---
-	{ID: "emote_dance", Name: "Emote: Tanzen", Description: "Lässt den Charakter tanzen (im Spiel ab Werk unbelegt)", Enabled: false,
+	{ID: "emote_dance", Name: "Emote: Tanzen", Description: "Der Charakter legt eine Tanzeinlage hin.", Enabled: false,
 		RewardTitle: "Tanz!", RewardCost: 200, Key: "", HoldMs: 80,
 		Cooldown: 30000, Category: "emote", SCActionMap: "player_emotes", SCAction: "emote_dance"},
-	{ID: "emote_wave", Name: "Emote: Winken", Description: "Winkt (im Spiel ab Werk unbelegt)", Enabled: false,
+	{ID: "emote_wave", Name: "Emote: Winken", Description: "Der Charakter winkt.", Enabled: false,
 		RewardTitle: "Winken!", RewardCost: 100, Key: "", HoldMs: 80,
 		Cooldown: 15000, Category: "emote", SCActionMap: "player_emotes", SCAction: "emote_wave"},
-	{ID: "emote_salute", Name: "Emote: Salutieren", Description: "Salutiert (im Spiel ab Werk unbelegt)", Enabled: false,
+	{ID: "emote_salute", Name: "Emote: Salutieren", Description: "Der Charakter salutiert.", Enabled: false,
 		RewardTitle: "Salut!", RewardCost: 100, Key: "", HoldMs: 80,
 		Cooldown: 15000, Category: "emote", SCActionMap: "player_emotes", SCAction: "emote_salute"},
-	{ID: "emote_chicken", Name: "Emote: Huhn", Description: "Macht das Huhn (im Spiel ab Werk unbelegt)", Enabled: false,
+	{ID: "emote_chicken", Name: "Emote: Huhn", Description: "Der Charakter macht das Huhn.", Enabled: false,
 		RewardTitle: "Huhn!", RewardCost: 300, Key: "", HoldMs: 80,
 		Cooldown: 30000, Category: "emote", SCActionMap: "player_emotes", SCAction: "emote_chicken"},
-	{ID: "emote_taunt", Name: "Emote: Verhöhnen", Description: "Verhöhnt (im Spiel ab Werk unbelegt)", Enabled: false,
+	{ID: "emote_taunt", Name: "Emote: Verhöhnen", Description: "Der Charakter verhöhnt sein Gegenüber.", Enabled: false,
 		RewardTitle: "Taunt!", RewardCost: 300, Key: "", HoldMs: 80,
 		Cooldown: 30000, Category: "emote", SCActionMap: "player_emotes", SCAction: "emote_taunt"},
 
 	// --- Gefaehrlich: standardmaessig aus, teuer, langer Cooldown ---
-	{ID: "eject", Name: "Schleudersitz", Description: "Katapultiert dich aus dem Schiff", Enabled: false,
+	{ID: "eject", Name: "Schleudersitz", Description: "Katapultiert den Piloten aus dem Schiff.", Enabled: false,
 		RewardTitle: "EJECT!", RewardCost: 10000, Key: "ralt+y", HoldMs: 200,
 		Cooldown: 900000, Category: "danger", SCActionMap: "seat_general", SCAction: "v_eject"},
 	// Star Citizen will die Taste hier rund fünfzehn Sekunden gehalten sehen,
 	// nicht bloß kurz gedrückt. Mit den 900 ms aus dem activationMode passierte
 	// schlicht nichts.
-	{ID: "self_destruct", Name: "Selbstzerstörung", Description: "Startet den Countdown zur Selbstzerstörung. Taste wird 15 Sekunden gehalten.", Enabled: false,
+	{ID: "self_destruct", Name: "Selbstzerstörung", Description: "Startet den Countdown zur Selbstzerstörung des Schiffs.", Enabled: false,
 		RewardTitle: "SELBSTZERSTÖRUNG!", RewardCost: 25000, Key: "backspace", HoldMs: 15000,
 		Cooldown: 1800000, Category: "danger", SCActionMap: "spaceship_general", SCAction: "v_self_destruct"},
 }
@@ -303,6 +304,7 @@ func Load() (*Config, error) {
 		cfg.raiseTooShortHolds()
 		cfg.MigratedHolds = true
 	}
+	cfg.sanitizeDescriptions()
 	cfg.mergeNewActions()
 	_ = cfg.Save()
 
@@ -346,6 +348,45 @@ func (c *Config) migrateLegacyActions() {
 		kept = append(kept, d)
 	}
 	c.Actions = kept
+}
+
+// setupNotes sind Formulierungen, die sich an den Streamer richten und frueher
+// in den Beschreibungen standen. Seit die Beschreibung als Text der Belohnung
+// an Twitch geht, bekaeme jeder Zuschauer sie zu sehen.
+var setupNotes = []string{
+	"im Spiel ab Werk unbelegt",
+	"Taste wird 15 Sekunden gehalten",
+	"Langer Druck auf B",
+}
+
+// sanitizeDescriptions ersetzt Beschreibungen, in denen noch ein solcher
+// Einrichtungshinweis steckt, durch die mitgelieferte Fassung.
+//
+// Bewusst nur diese: eine selbst geschriebene Beschreibung bleibt unangetastet.
+// Laeuft bei jedem Laden, ist aber nach dem ersten Durchgang wirkungslos --
+// deshalb braucht es keine Merkung.
+func (c *Config) sanitizeDescriptions() {
+	shipped := make(map[string]Action, len(defaultActions))
+	for _, d := range defaultActions {
+		shipped[d.ID] = d
+	}
+
+	for i := range c.Actions {
+		a := &c.Actions[i]
+		if a.Custom {
+			continue
+		}
+		d, ok := shipped[a.ID]
+		if !ok {
+			continue
+		}
+		for _, note := range setupNotes {
+			if strings.Contains(a.Description, note) {
+				a.Description = d.Description
+				break
+			}
+		}
+	}
 }
 
 // raiseTooShortHolds hebt Haltezeiten an, die unter dem mitgelieferten Wert

@@ -7,6 +7,7 @@ import (
 	"sctroll/internal/config"
 	"sctroll/internal/input"
 	"sctroll/internal/starcitizen"
+	"sctroll/internal/twitch"
 )
 
 // Jede mitgelieferte Aktion muss eine Taste haben, die sich tatsaechlich
@@ -165,4 +166,28 @@ func TestSelfDestructIsHeldLongEnough(t *testing.T) {
 		return
 	}
 	t.Skip("keine Selbstzerstörung vorhanden")
+}
+
+// Die Beschreibung geht als Text der Belohnung an Twitch und wird jedem
+// Zuschauer angezeigt. Einrichtungshinweise haben darin nichts verloren.
+func TestDescriptionsAreWrittenForViewers(t *testing.T) {
+	// Formulierungen, die sich an den Streamer richten, nicht an den Zuschauer.
+	internal := []string{"unbelegt", "actionmaps", "activationMode", "Taste wird", "langer Druck auf"}
+
+	for _, a := range config.DefaultActions() {
+		if a.Description == "" {
+			t.Errorf("%s: keine Beschreibung — der Zuschauer sähe nur den Reward-Titel", a.ID)
+			continue
+		}
+		if n := len([]rune(a.Description)); n > twitch.PromptLimit {
+			t.Errorf("%s: Beschreibung ist %d Zeichen lang, Twitch nimmt %d", a.ID, n, twitch.PromptLimit)
+		}
+		lower := strings.ToLower(a.Description)
+		for _, bad := range internal {
+			if strings.Contains(lower, strings.ToLower(bad)) {
+				t.Errorf("%s: Beschreibung enthält den Einrichtungshinweis %q — den bekämen die Zuschauer zu sehen: %q",
+					a.ID, bad, a.Description)
+			}
+		}
+	}
 }

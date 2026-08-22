@@ -1,6 +1,9 @@
 package config
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // Genau hieran ist v1.0.4 gescheitert: die Umstellung auf Star Citizens echte
 // Standardbelegungen hat Tasten von Aktionen geleert, die im Spiel ab Werk
@@ -97,5 +100,31 @@ func TestRaiseTooShortHolds(t *testing.T) {
 	}
 	if got := byID["custom_1"].HoldMs; got != 10 {
 		t.Errorf("eigene Aktion wurde angefasst: %dms", got)
+	}
+}
+
+// Alte Konfigurationen tragen Einrichtungshinweise in der Beschreibung. Seit die
+// als Text der Belohnung an Twitch geht, bekäme jeder Zuschauer sie zu sehen.
+func TestSanitizeDescriptions(t *testing.T) {
+	c := &Config{Actions: []Action{
+		{ID: "doors", Description: "Schaltet alle Schiffstüren um (im Spiel ab Werk unbelegt)"},
+		{ID: "lights", Description: "Mein eigener Text, bitte stehen lassen"},
+		{ID: "custom_1", Custom: true, Description: "Eigene Aktion (im Spiel ab Werk unbelegt)"},
+	}}
+
+	c.sanitizeDescriptions()
+
+	byID := map[string]Action{}
+	for _, a := range c.Actions {
+		byID[a.ID] = a
+	}
+	if strings.Contains(byID["doors"].Description, "unbelegt") {
+		t.Errorf("Einrichtungshinweis steht noch drin: %q", byID["doors"].Description)
+	}
+	if byID["lights"].Description != "Mein eigener Text, bitte stehen lassen" {
+		t.Errorf("eigener Text wurde überschrieben: %q", byID["lights"].Description)
+	}
+	if byID["custom_1"].Description != "Eigene Aktion (im Spiel ab Werk unbelegt)" {
+		t.Errorf("eigene Aktion wurde angefasst: %q", byID["custom_1"].Description)
 	}
 }
