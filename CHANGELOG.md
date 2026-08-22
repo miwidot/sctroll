@@ -1,5 +1,45 @@
 # Changelog
 
+## 1.0.14
+
+### Beschreibung für die Zuschauer
+
+Twitch zeigt zu jeder Belohnung einen Beschreibungstext an. Bisher stand dort bei allen
+derselbe Platzhalter. Jetzt wird die **Beschreibung der Aktion** dorthin übernommen — der
+Zuschauer sieht also beim Einlösen, was er anrichtet.
+
+Gilt auch für bereits angelegte Rewards: beim nächsten Synchronisieren wird die Beschreibung
+nachgetragen. Twitch begrenzt den Text, längere Beschreibungen werden gekürzt statt den Aufruf
+scheitern zu lassen.
+
+### Selbstzerstörung wird 15 Sekunden gehalten
+
+Star Citizen will die Taste dafür lange gedrückt sehen. Die 900 ms, die sich aus dem
+`activationMode` ergaben, lösten schlicht nichts aus. Bestehende Konfigurationen werden einmalig
+angehoben — nur nach oben, wer bewusst länger eingestellt hat, behält seinen Wert.
+
+Lange Halteaktionen werden jetzt protokolliert, und die Taste wird per `defer` losgelassen. Ohne
+das konnte sie bei einem Abbruch gedrückt hängen bleiben — bei fünfzehn Sekunden ein spürbarer
+Unterschied.
+
+### Zwei neue Aktionen
+
+- **Nachladen** (`r`) — mitten im Gefecht besonders unpraktisch.
+- **Granate werfen** — zweistufig, wie im Spiel: `G` zieht die Granate, die linke Maustaste
+  wirft sie. Der Wurf wird gehalten, weil `throw_overhand` eine Halteaktion ist. Standardmäßig
+  aus.
+
+### Maustasten zählen jetzt wie im Spiel
+
+`mouse1` ist ab sofort die **linke** Taste, `mouse2` die rechte, `mouse3` die mittlere — so wie
+Star Citizen es in der `defaultProfile.xml` schreibt. Vorher zählte diese Tabelle ab null und
+`mouse1` war die rechte Taste: wer eine Belegung aus dem Spiel abschrieb, bekam die falsche.
+
+Die Tastennamen folgten dem Spiel schon lange, die Maustasten jetzt auch. `lmouse`, `rmouse`
+und `mmouse` funktionieren unverändert und sind eindeutig. **Wer in einer eigenen Aktion
+`mouse1` benutzt hat, sollte sie prüfen** — sie zeigt jetzt auf die linke statt auf die rechte
+Taste.
+
 ## 1.0.13
 
 Aus dem Log eines anderen Nutzers.

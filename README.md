@@ -138,7 +138,7 @@ lange die Taste gedrückt bleiben muss:
 | `press`, `tap` | 80 ms | Licht, Fahrwerk |
 | `delayed_press` | 500 ms | Master Mode (langer Druck auf `B`) |
 | `hold`, `onHold="1"` | 800 ms | Decoy, aus dem Sitz aufstehen |
-| `delayed_press_medium` | 900 ms | Selbstzerstörung |
+| `delayed_press_medium` | 900 ms | |
 | `delayed_hold_long` | 1600 ms | |
 
 Das ist kein Detail: mit 80 ms passiert bei einer Halteaktion auch mit korrekter Taste
@@ -175,7 +175,10 @@ abläuft. Nur wenn du den Zugriff auf Twitch-Seite widerrufst, ist eine neue Anm
 
 ## Aktionen
 
-28 mitgelieferte Aktionen. Die Tasten sind Star Citizens echte Standardbelegungen.
+30 mitgelieferte Aktionen. Die Tasten sind Star Citizens echte Standardbelegungen.
+
+Die **Beschreibung** einer Aktion ist zugleich der Text, den deine Zuschauer beim Einlösen
+sehen — Twitch zeigt sie unter der Belohnung an.
 
 | Kategorie | Aktion | Taste | Halten |
 |---|---|---|---|
@@ -199,13 +202,17 @@ abläuft. Nur wenn du den Zugriff auf Twitch-Seite widerrufst, ist eine neue Anm
 | Spieler | Helm ab | `LAlt+H` | 80 ms |
 | Spieler | Taschenlampe | `T` | 80 ms |
 | Spieler | Aus dem Sitz | `Y` | **900 ms** |
+| Spieler | Nachladen | `R` | 80 ms |
+| Spieler | Granate werfen | `G` + linke Maustaste | zweistufig |
 | Spaß | 360 Spin | *Mausbewegung* | — |
 | Emotes | Tanzen, Winken, Salutieren, Huhn, Verhöhnen | *unbelegt* | 80 ms |
 | Gefährlich | Schleudersitz | `RAlt+Y` | 200 ms |
-| Gefährlich | Selbstzerstörung | `Backspace` | **900 ms** |
+| Gefährlich | Selbstzerstörung | `Backspace` | **15 s** |
 
 Eigene Aktionen lassen sich über das **+** anlegen: beliebige Taste, Tastenkombination,
-Maustaste, Wiederholungen oder eine mehrstufige Abfolge.
+Maustaste, Wiederholungen oder eine mehrstufige Abfolge. Maustasten zählen wie im Spiel:
+`mouse1` ist links, `mouse2` rechts, `mouse3` die mittlere. Eindeutiger sind `lmouse`,
+`rmouse` und `mmouse`.
 
 ---
 

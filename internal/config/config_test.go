@@ -70,3 +70,32 @@ func TestMigrateLegacyActionsCarriesReward(t *testing.T) {
 		t.Errorf("SCAction ist %q, erwartet v_master_mode_cycle_long", master.SCAction)
 	}
 }
+
+// Die Selbstzerstoerung muss im Spiel rund fuenfzehn Sekunden gehalten werden.
+// Bestehende Konfigurationen tragen noch die kurze Zeit aus dem Spielprofil und
+// wuerden sonst dauerhaft nichts ausloesen.
+func TestRaiseTooShortHolds(t *testing.T) {
+	c := &Config{Actions: []Action{
+		{ID: "self_destruct", Key: "backspace", HoldMs: 900},
+		{ID: "lights", Key: "l", HoldMs: 80},
+		// Bewusst länger eingestellt: darf nicht gesenkt werden.
+		{ID: "look_behind", Key: "comma", HoldMs: 5000},
+		{ID: "custom_1", Custom: true, HoldMs: 10},
+	}}
+
+	c.raiseTooShortHolds()
+
+	byID := map[string]Action{}
+	for _, a := range c.Actions {
+		byID[a.ID] = a
+	}
+	if got := byID["self_destruct"].HoldMs; got < 10000 {
+		t.Errorf("self_destruct hält %dms, erwartet mindestens 10000", got)
+	}
+	if got := byID["look_behind"].HoldMs; got != 5000 {
+		t.Errorf("look_behind wurde von 5000 auf %d geändert — nur anheben, nie senken", got)
+	}
+	if got := byID["custom_1"].HoldMs; got != 10 {
+		t.Errorf("eigene Aktion wurde angefasst: %dms", got)
+	}
+}

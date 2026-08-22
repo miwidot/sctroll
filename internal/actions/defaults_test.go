@@ -120,3 +120,49 @@ func TestDangerousActionsDisabledByDefault(t *testing.T) {
 		}
 	}
 }
+
+// Mehrstufige Aktionen muessen in sich stimmig sein: der Wurf beim Granaten-
+// Ablauf braucht die Maustaste, nicht die Auswahltaste.
+func TestGrenadeSequence(t *testing.T) {
+	var grenade *config.Action
+	for _, a := range config.DefaultActions() {
+		if a.ID == "grenade" {
+			a := a
+			grenade = &a
+		}
+	}
+	if grenade == nil {
+		t.Skip("keine Granaten-Aktion vorhanden")
+	}
+
+	if len(grenade.Steps) < 3 {
+		t.Fatalf("erwartet Auswahl, Pause und Wurf, gefunden %d Schritte", len(grenade.Steps))
+	}
+	if !strings.EqualFold(grenade.Steps[0].Key, grenade.Key) {
+		t.Errorf("erster Schritt drückt %q, die Aktion ist aber auf %q gebunden",
+			grenade.Steps[0].Key, grenade.Key)
+	}
+
+	last := grenade.Steps[len(grenade.Steps)-1]
+	if !input.IsMouseButton(last.Key) {
+		t.Errorf("letzter Schritt ist %q — der Wurf läuft im Spiel über die Maustaste", last.Key)
+	}
+	if last.HoldMs < 300 {
+		t.Errorf("Wurf wird nur %dms gehalten; throw_overhand ist eine Halteaktion", last.HoldMs)
+	}
+}
+
+// Die Selbstzerstoerung braucht einen langen Halt. Mit einem kurzen Druck
+// passiert im Spiel nichts -- das faellt sonst erst live auf.
+func TestSelfDestructIsHeldLongEnough(t *testing.T) {
+	for _, a := range config.DefaultActions() {
+		if a.ID != "self_destruct" {
+			continue
+		}
+		if a.HoldMs < 10000 {
+			t.Errorf("Selbstzerstörung hält nur %dms — das Spiel verlangt rund 15 Sekunden", a.HoldMs)
+		}
+		return
+	}
+	t.Skip("keine Selbstzerstörung vorhanden")
+}

@@ -348,7 +348,21 @@ func (c *Client) SetAllRewardsEnabled(enabled bool) error {
 	return nil
 }
 
-func (c *Client) CreateReward(title string, cost int, cooldownMs int, color string) (string, error) {
+// PromptLimit ist Twitchs Obergrenze fuer die Beschreibung einer Belohnung.
+// Laengere Texte lehnt die API ab, deshalb wird gekuerzt statt zu scheitern.
+const PromptLimit = 200
+
+// TrimPrompt kuerzt eine Beschreibung auf das, was Twitch annimmt.
+func TrimPrompt(s string) string {
+	s = strings.TrimSpace(s)
+	r := []rune(s)
+	if len(r) <= PromptLimit {
+		return s
+	}
+	return strings.TrimSpace(string(r[:PromptLimit-1])) + "…"
+}
+
+func (c *Client) CreateReward(title string, cost int, cooldownMs int, color, prompt string) (string, error) {
 	debuglog.Log("CreateReward: title=%q cost=%d cooldown=%dms color=%s broadcaster_id=%s", title, cost, cooldownMs, color, c.cfg.BroadcasterID)
 	body := map[string]interface{}{
 		"title":                  title,
@@ -373,6 +387,10 @@ func (c *Client) CreateReward(title string, cost int, cooldownMs int, color stri
 	// Set reward color if specified (hex format like #9146FF)
 	if color != "" {
 		body["background_color"] = color
+	}
+	// Beschreibung: das ist der Text, den der Zuschauer beim Einloesen sieht.
+	if p := TrimPrompt(prompt); p != "" {
+		body["prompt"] = p
 	}
 	jsonBody, _ := json.Marshal(body)
 

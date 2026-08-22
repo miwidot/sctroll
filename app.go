@@ -199,9 +199,12 @@ func (a *App) UpdateAction(action config.Action) error {
 
 	// Sync changes to Twitch if connected and reward exists
 	if a.twClient != nil && a.twClient.IsConnected() && action.RewardID != "" {
+		// Die Beschreibung der Aktion ist zugleich der Text, den der Zuschauer
+		// beim Einlösen sieht — deshalb bei jeder Änderung mitschicken.
 		fields := map[string]interface{}{
-			"title": action.RewardTitle,
-			"cost":  action.RewardCost,
+			"title":  action.RewardTitle,
+			"cost":   action.RewardCost,
+			"prompt": twitch.TrimPrompt(action.Description),
 		}
 		twCooldown := action.Cooldown / 1000
 		if action.TwitchCooldown > 0 {
@@ -344,7 +347,7 @@ func (a *App) ToggleAction(id string, enabled bool) error {
 	if target.TwitchCooldown > 0 {
 		twCooldown = target.TwitchCooldown * 1000
 	}
-	rewardID, err := a.twClient.CreateReward(target.RewardTitle, target.RewardCost, twCooldown, target.RewardColor)
+	rewardID, err := a.twClient.CreateReward(target.RewardTitle, target.RewardCost, twCooldown, target.RewardColor, target.Description)
 	if err != nil {
 		// Bisher wurde dieser Fehler verschluckt: der Schalter ging an, auf
 		// Twitch entstand nichts, und niemand erfuhr davon.
@@ -840,8 +843,15 @@ func (a *App) SyncRewards() error {
 		if action.RewardID != "" {
 			if existingByID[action.RewardID] {
 				debuglog.Log("SyncRewards: %s bereits verknüpft und existiert (ID: %s)", action.ID, action.RewardID)
-				runtime.EventsEmit(a.ctx, "twitch-log",
-					fmt.Sprintf("Reward '%s' bereits verknüpft (ID: %s)", action.RewardTitle, action.RewardID))
+
+				// Beschreibung nachziehen: bestehende Rewards wurden ohne
+				// angelegt, sonst bliebe der Zuschauer bei ihnen im Dunkeln.
+				if p := twitch.TrimPrompt(action.Description); p != "" {
+					if err := a.twClient.UpdateReward(action.RewardID,
+						map[string]interface{}{"prompt": p}, ""); err != nil {
+						debuglog.Log("SyncRewards: Beschreibung für %s nicht gesetzt: %s", action.ID, err)
+					}
+				}
 				continue
 			}
 			// RewardID saved but doesn't exist on Twitch anymore — clear it
@@ -865,7 +875,7 @@ func (a *App) SyncRewards() error {
 			twCooldown = action.TwitchCooldown * 1000
 		}
 		debuglog.Log("SyncRewards: erstelle neuen Reward für %s: title=%q cost=%d twCooldown=%dms", action.ID, action.RewardTitle, action.RewardCost, twCooldown)
-		rewardID, err := a.twClient.CreateReward(action.RewardTitle, action.RewardCost, twCooldown, action.RewardColor)
+		rewardID, err := a.twClient.CreateReward(action.RewardTitle, action.RewardCost, twCooldown, action.RewardColor, action.Description)
 		if err != nil {
 			debuglog.Log("SyncRewards: FEHLER beim Erstellen von %s: %s", action.ID, err)
 
@@ -1087,6 +1097,23 @@ func (a *App) GetBindStatus() ([]BindStatus, error) {
 	return out, nil
 }
 
+// retargetSteps zieht Schritte einer mehrstufigen Aktion auf eine neue Taste
+// nach. Nur die Schritte, die wirklich die alte Taste benutzen -- andere, etwa
+// der Mausklick beim Granatenwurf, bleiben unberuehrt.
+func retargetSteps(act *config.Action, oldKey, newKey string) {
+	if oldKey == "" || len(act.Steps) == 0 {
+		return
+	}
+	for i := range act.Steps {
+		if strings.EqualFold(act.Steps[i].Key, oldKey) {
+			act.Steps[i].Key = newKey
+		}
+		if strings.EqualFold(act.Steps[i].Release, oldKey) {
+			act.Steps[i].Release = newKey
+		}
+	}
+}
+
 // ImportSCBinds gleicht die Tasten der Aktionen mit dem Spiel ab: eigene
 // Belegung aus der actionmaps.xml, sonst Star Citizens Standardbelegung.
 // Beide Dateien werden nur gelesen.
@@ -1119,6 +1146,9 @@ func (a *App) ImportSCBinds() (int, error) {
 		changed := false
 		if !strings.EqualFold(key, act.Key) {
 			debuglog.Log("ImportSCBinds: %s (%s) %q -> %q [%s]", act.ID, act.SCAction, act.Key, key, source)
+			// Mehrstufige Aktionen führen die Taste ein zweites Mal in den
+			// Schritten. Ohne Nachziehen drückte die Granate weiter die alte.
+			retargetSteps(&act, act.Key, key)
 			act.Key = key
 			changed = true
 		}

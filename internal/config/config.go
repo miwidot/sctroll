@@ -115,6 +115,11 @@ type Config struct {
 	// echte Standardbelegungen gelaufen ist. Davor standen ausgedachte
 	// RAlt-Kombinationen in der Konfiguration.
 	MigratedRealKeys bool `json:"migrated_real_keys,omitempty"`
+
+	// MigratedHolds markiert, dass zu kurze Haltezeiten einmalig angehoben
+	// wurden. Betrifft vor allem die Selbstzerstoerung, die das Spiel rund
+	// fuenfzehn Sekunden gehalten sehen will.
+	MigratedHolds bool `json:"migrated_holds,omitempty"`
 }
 
 // Die Tasten hier sind Star Citizens echte Standardbelegungen aus der
@@ -197,6 +202,20 @@ var defaultActions = []Action{
 	{ID: "exit_seat", Name: "Aus dem Sitz", Description: "Steht auf bzw. steigt aus (langer Druck)", Enabled: false,
 		RewardTitle: "Aufstehen!", RewardCost: 2000, Key: "y", HoldMs: 900,
 		Cooldown: 300000, Category: "player", SCActionMap: "default", SCAction: "pl_exit"},
+	{ID: "reload", Name: "Nachladen", Description: "Lädt die Waffe nach — mitten im Gefecht besonders unpraktisch", Enabled: true,
+		RewardTitle: "Nachladen!", RewardCost: 300, Key: "r", HoldMs: 80,
+		Cooldown: 30000, Category: "player", SCActionMap: "player", SCAction: "reload"},
+	// Zweistufig: G wählt die Granate, die linke Maustaste wirft sie. Gehalten
+	// wird beim Wurf, weil throw_overhand im Spiel eine Halteaktion ist --
+	// je länger, desto weiter fliegt sie.
+	{ID: "grenade", Name: "Granate werfen", Description: "Zieht eine Granate und wirft sie. Nicht im Schiff empfohlen.", Enabled: false,
+		RewardTitle: "Granate!", RewardCost: 1500, Key: "g", HoldMs: 80,
+		Steps: []ActionStep{
+			{Key: "g", HoldMs: 80},
+			{DelayMs: 700},
+			{Key: "mouse1", HoldMs: 700},
+		},
+		Cooldown: 300000, Category: "player", SCActionMap: "player_choice", SCAction: "pc_qs_grenades"},
 	{ID: "spin360", Name: "360 Spin", Description: "Dreht die Ansicht einmal komplett herum", Enabled: false,
 		RewardTitle: "360 Spin!", RewardCost: 400, Key: "spin360", HoldMs: 8000,
 		Cooldown: 30000, Category: "fun"},
@@ -222,8 +241,11 @@ var defaultActions = []Action{
 	{ID: "eject", Name: "Schleudersitz", Description: "Katapultiert dich aus dem Schiff", Enabled: false,
 		RewardTitle: "EJECT!", RewardCost: 10000, Key: "ralt+y", HoldMs: 200,
 		Cooldown: 900000, Category: "danger", SCActionMap: "seat_general", SCAction: "v_eject"},
-	{ID: "self_destruct", Name: "Selbstzerstörung", Description: "Startet den Countdown zur Selbstzerstörung (langer Druck)", Enabled: false,
-		RewardTitle: "SELBSTZERSTÖRUNG!", RewardCost: 25000, Key: "backspace", HoldMs: 900,
+	// Star Citizen will die Taste hier rund fünfzehn Sekunden gehalten sehen,
+	// nicht bloß kurz gedrückt. Mit den 900 ms aus dem activationMode passierte
+	// schlicht nichts.
+	{ID: "self_destruct", Name: "Selbstzerstörung", Description: "Startet den Countdown zur Selbstzerstörung. Taste wird 15 Sekunden gehalten.", Enabled: false,
+		RewardTitle: "SELBSTZERSTÖRUNG!", RewardCost: 25000, Key: "backspace", HoldMs: 15000,
 		Cooldown: 1800000, Category: "danger", SCActionMap: "spaceship_general", SCAction: "v_self_destruct"},
 }
 
@@ -277,6 +299,10 @@ func Load() (*Config, error) {
 		cfg.adoptShippedKeys()
 		cfg.MigratedRealKeys = true
 	}
+	if !cfg.MigratedHolds {
+		cfg.raiseTooShortHolds()
+		cfg.MigratedHolds = true
+	}
 	cfg.mergeNewActions()
 	_ = cfg.Save()
 
@@ -320,6 +346,30 @@ func (c *Config) migrateLegacyActions() {
 		kept = append(kept, d)
 	}
 	c.Actions = kept
+}
+
+// raiseTooShortHolds hebt Haltezeiten an, die unter dem mitgelieferten Wert
+// liegen.
+//
+// Noetig, weil einzelne Aktionen laenger gehalten werden muessen, als die
+// Aktivierungsart im Spielprofil vermuten laesst -- die Selbstzerstoerung
+// braucht rund fuenfzehn Sekunden. Nur anheben, nie senken: wer bewusst laenger
+// eingestellt hat, behaelt seinen Wert.
+func (c *Config) raiseTooShortHolds() {
+	shipped := make(map[string]Action, len(defaultActions))
+	for _, d := range defaultActions {
+		shipped[d.ID] = d
+	}
+	for i := range c.Actions {
+		a := &c.Actions[i]
+		if a.Custom {
+			continue
+		}
+		d, ok := shipped[a.ID]
+		if ok && a.HoldMs < d.HoldMs {
+			a.HoldMs = d.HoldMs
+		}
+	}
 }
 
 // adoptShippedKeys setzt Taste und Haltezeit der mitgelieferten Aktionen einmalig

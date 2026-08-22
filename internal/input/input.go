@@ -117,15 +117,27 @@ type mouseButton struct {
 	xButton  uint32
 }
 
+// Maustasten in Star Citizens Zaehlweise: mouse1 ist links, mouse2 rechts,
+// mouse3 die mittlere. So steht es in defaultProfile.xml, etwa
+// throw_overhand mouse="mouse1" fuer den Wurf.
+//
+// Vorher zaehlte diese Tabelle ab null und mouse1 war die RECHTE Taste -- wer
+// eine Belegung aus dem Spiel abschrieb, bekam die falsche. Die Tastennamen
+// folgen dem Spiel schon lange, die Maustasten jetzt auch.
 var mouseMap = map[string]mouseButton{
-	"mouse0": {MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP, 0},
-	"mouse1": {MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP, 0},
-	"mouse2": {MOUSEEVENTF_MIDDLEDOWN, MOUSEEVENTF_MIDDLEUP, 0},
-	"mouse3": {MOUSEEVENTF_XDOWN, MOUSEEVENTF_XUP, XBUTTON1},
-	"mouse4": {MOUSEEVENTF_XDOWN, MOUSEEVENTF_XUP, XBUTTON2},
+	"mouse1": {MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP, 0},
+	"mouse2": {MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP, 0},
+	"mouse3": {MOUSEEVENTF_MIDDLEDOWN, MOUSEEVENTF_MIDDLEUP, 0},
+	"mouse4": {MOUSEEVENTF_XDOWN, MOUSEEVENTF_XUP, XBUTTON1},
+	"mouse5": {MOUSEEVENTF_XDOWN, MOUSEEVENTF_XUP, XBUTTON2},
+
+	// Eindeutige Namen, unabhaengig von der Zaehlweise.
 	"lmouse": {MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP, 0},
 	"rmouse": {MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP, 0},
 	"mmouse": {MOUSEEVENTF_MIDDLEDOWN, MOUSEEVENTF_MIDDLEUP, 0},
+
+	// Altlast aus der Tarkov-Vorlage, wo ab null gezaehlt wurde.
+	"mouse0": {MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP, 0},
 }
 
 func isMouseKey(key string) bool {
@@ -393,23 +405,53 @@ func PressKey(keySpec string, holdMs int) {
 		}
 	}
 
+	// Modifier in umgekehrter Reihenfolge freigeben -- per defer, damit sie
+	// auch bei einem Abbruch nicht gedrueckt haengen bleiben.
+	defer func() {
+		for i := len(modifiers) - 1; i >= 0; i-- {
+			sendKeyUp(modifiers[i])
+			time.Sleep(10 * time.Millisecond)
+		}
+	}()
+
 	// Press main key (could be keyboard or mouse)
 	mainKey := parts[len(parts)-1]
 	if btn, ok := mouseMap[mainKey]; ok {
 		sendMouseDown(btn)
-		time.Sleep(time.Duration(holdMs) * time.Millisecond)
-		sendMouseUp(btn)
+		defer sendMouseUp(btn)
+		holdFor(holdMs, keySpec)
 	} else if vk, ok := ResolveKey(mainKey); ok {
 		sendKeyDown(vk)
-		time.Sleep(time.Duration(holdMs) * time.Millisecond)
-		sendKeyUp(vk)
+		defer sendKeyUp(vk)
+		holdFor(holdMs, keySpec)
 	} else {
 		debuglog.Log("PressKey: UNKNOWN main key %q in spec %q — nichts gesendet!", mainKey, keySpec)
 	}
+}
 
-	// Release modifiers in reverse
-	for i := len(modifiers) - 1; i >= 0; i-- {
-		sendKeyUp(modifiers[i])
-		time.Sleep(10 * time.Millisecond)
+// holdFor haelt die Taste. Lange Halteaktionen -- die Selbstzerstoerung braucht
+// rund fuenfzehn Sekunden -- werden protokolliert, damit im Log nachvollziehbar
+// ist, warum in dieser Zeit nichts anderes passiert: die Warteschlange laesst
+// bewusst nur eine Aktion gleichzeitig zu.
+func holdFor(holdMs int, keySpec string) {
+	const longHold = 3000
+
+	if holdMs < longHold {
+		time.Sleep(time.Duration(holdMs) * time.Millisecond)
+		return
 	}
+
+	debuglog.Log("PressKey: %q wird %.1fs gehalten", keySpec, float64(holdMs)/1000)
+	deadline := time.Now().Add(time.Duration(holdMs) * time.Millisecond)
+	for {
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			break
+		}
+		if remaining > time.Second {
+			remaining = time.Second
+		}
+		time.Sleep(remaining)
+	}
+	debuglog.Log("PressKey: %q wieder losgelassen", keySpec)
 }

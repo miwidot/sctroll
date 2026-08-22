@@ -158,6 +158,7 @@ export namespace config {
 	    sc_dir?: string;
 	    sc_channel?: string;
 	    migrated_real_keys?: boolean;
+	    migrated_holds?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
@@ -174,6 +175,7 @@ export namespace config {
 	        this.sc_dir = source["sc_dir"];
 	        this.sc_channel = source["sc_channel"];
 	        this.migrated_real_keys = source["migrated_real_keys"];
+	        this.migrated_holds = source["migrated_holds"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

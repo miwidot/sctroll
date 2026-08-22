@@ -276,7 +276,7 @@ func TestCreateRewardDetectsDuplicate(t *testing.T) {
 	c := testClient(&config.TwitchConfig{AccessToken: "a", RefreshToken: "r",
 		ExpiresAt: time.Now().Add(time.Hour), BroadcasterID: "1"})
 
-	_, err := c.CreateReward("Helm ab!", 500, 60000, "")
+	_, err := c.CreateReward("Helm ab!", 500, 60000, "", "")
 	if !errors.Is(err, ErrRewardExists) {
 		t.Fatalf("erwartet ErrRewardExists, bekam %v", err)
 	}
@@ -350,7 +350,7 @@ func TestCreateRewardDetectsChannelLimit(t *testing.T) {
 	c := testClient(&config.TwitchConfig{AccessToken: "a", RefreshToken: "r",
 		ExpiresAt: time.Now().Add(time.Hour), BroadcasterID: "1"})
 
-	_, err := c.CreateReward("Taunt!", 300, 30000, "")
+	_, err := c.CreateReward("Taunt!", 300, 30000, "", "")
 	if !errors.Is(err, ErrTooManyRewards) {
 		t.Fatalf("erwartet ErrTooManyRewards, bekam %v", err)
 	}
@@ -367,5 +367,30 @@ func TestHasLoginIgnoresAccessToken(t *testing.T) {
 	}
 	if (config.TwitchConfig{AccessToken: "a"}).HasLogin() {
 		t.Error("ohne Refresh Token lässt sich nichts wiederherstellen")
+	}
+}
+
+// Twitch lehnt zu lange Beschreibungen ab. Gekuerzt wird deshalb hier, statt
+// den Aufruf scheitern zu lassen -- eine zu lange Beschreibung ist kein Grund,
+// den Reward gar nicht erst anzulegen.
+func TestTrimPrompt(t *testing.T) {
+	if got := TrimPrompt("  kurz und knapp  "); got != "kurz und knapp" {
+		t.Errorf("Leerraum nicht entfernt: %q", got)
+	}
+
+	long := strings.Repeat("ä", PromptLimit+50)
+	got := TrimPrompt(long)
+	if n := len([]rune(got)); n > PromptLimit {
+		t.Errorf("gekürzt auf %d Zeichen, erlaubt sind %d", n, PromptLimit)
+	}
+	if !strings.HasSuffix(got, "…") {
+		t.Error("Kürzung ist nicht als solche erkennbar")
+	}
+
+	// Umlaute zählen als ein Zeichen, nicht als zwei Bytes -- sonst würde
+	// deutscher Text unnötig früh abgeschnitten.
+	exact := strings.Repeat("ö", PromptLimit)
+	if TrimPrompt(exact) != exact {
+		t.Error("genau erlaubte Länge wurde gekürzt")
 	}
 }
