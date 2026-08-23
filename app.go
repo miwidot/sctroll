@@ -199,31 +199,34 @@ func (a *App) UpdateAction(action config.Action) error {
 
 	// Sync changes to Twitch if connected and reward exists
 	if a.twClient != nil && a.twClient.IsConnected() && action.RewardID != "" {
-		// Die Beschreibung der Aktion ist zugleich der Text, den der Zuschauer
-		// beim Einlösen sieht — deshalb bei jeder Änderung mitschicken.
-		fields := map[string]interface{}{
-			"title":  action.RewardTitle,
-			"cost":   action.RewardCost,
-			"prompt": twitch.TrimPrompt(action.Description),
-		}
-		twCooldown := action.Cooldown / 1000
-		if action.TwitchCooldown > 0 {
-			twCooldown = action.TwitchCooldown
-		}
-		if twCooldown >= 60 {
-			fields["is_global_cooldown_enabled"] = true
-			fields["global_cooldown_seconds"] = twCooldown
-		} else if twCooldown > 0 {
-			fields["is_global_cooldown_enabled"] = true
-			fields["global_cooldown_seconds"] = 60
-		}
-		if err := a.twClient.UpdateReward(action.RewardID, fields, action.RewardColor); err != nil {
+		if err := a.twClient.UpdateRewardSpec(action.RewardID, rewardSpec(action)); err != nil {
 			debuglog.Log("UpdateAction: Twitch sync error: %s", err)
 		} else {
 			debuglog.Log("UpdateAction: Twitch reward updated for %s", action.ID)
 		}
 	}
 	return nil
+}
+
+// rewardSpec uebersetzt eine Aktion in die Beschreibung ihrer Twitch-Belohnung.
+//
+// An einer Stelle, damit Anlegen und Aendern nicht auseinanderlaufen -- genau
+// das war frueher der Fall, weshalb Aenderungen an Grenzen oder Beschreibung
+// beim Anlegen anders behandelt wurden als beim Bearbeiten.
+func rewardSpec(a config.Action) twitch.RewardSpec {
+	cooldownMs := a.Cooldown
+	if a.TwitchCooldown > 0 {
+		cooldownMs = a.TwitchCooldown * 1000
+	}
+	return twitch.RewardSpec{
+		Title:               a.RewardTitle,
+		Cost:                a.RewardCost,
+		CooldownMs:          cooldownMs,
+		Color:               a.RewardColor,
+		Prompt:              a.Description,
+		MaxPerStream:        a.MaxPerStream,
+		MaxPerUserPerStream: a.MaxPerUserPerStream,
+	}
 }
 
 func (a *App) AddCustomAction(action config.Action) (config.Action, error) {
@@ -343,11 +346,7 @@ func (a *App) ToggleAction(id string, enabled bool) error {
 	}
 
 	// Noch kein Reward auf dem Kanal: anlegen.
-	twCooldown := target.Cooldown
-	if target.TwitchCooldown > 0 {
-		twCooldown = target.TwitchCooldown * 1000
-	}
-	rewardID, err := a.twClient.CreateReward(target.RewardTitle, target.RewardCost, twCooldown, target.RewardColor, target.Description)
+	rewardID, err := a.twClient.CreateReward(rewardSpec(*target))
 	if err != nil {
 		// Bisher wurde dieser Fehler verschluckt: der Schalter ging an, auf
 		// Twitch entstand nichts, und niemand erfuhr davon.
@@ -870,12 +869,8 @@ func (a *App) SyncRewards() error {
 		}
 
 		// Create new reward
-		twCooldown := action.Cooldown
-		if action.TwitchCooldown > 0 {
-			twCooldown = action.TwitchCooldown * 1000
-		}
-		debuglog.Log("SyncRewards: erstelle neuen Reward für %s: title=%q cost=%d twCooldown=%dms", action.ID, action.RewardTitle, action.RewardCost, twCooldown)
-		rewardID, err := a.twClient.CreateReward(action.RewardTitle, action.RewardCost, twCooldown, action.RewardColor, action.Description)
+		debuglog.Log("SyncRewards: erstelle neuen Reward für %s: title=%q cost=%d", action.ID, action.RewardTitle, action.RewardCost)
+		rewardID, err := a.twClient.CreateReward(rewardSpec(action))
 		if err != nil {
 			debuglog.Log("SyncRewards: FEHLER beim Erstellen von %s: %s", action.ID, err)
 

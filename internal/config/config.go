@@ -50,6 +50,15 @@ type Action struct {
 	Cooldown       int           `json:"cooldown_ms"`
 	TwitchCooldown int           `json:"twitch_cooldown_sec,omitempty"`
 
+	// Obergrenzen pro Stream, 0 = unbegrenzt.
+	//
+	// Durchgesetzt wird das von Twitch selbst: die Belohnung wird ausgeblendet,
+	// sobald die Grenze erreicht ist, und zwar bevor Punkte abgebucht werden.
+	// Selbst mitzuzaehlen waere schlechter -- der Zuschauer wuerde bezahlen und
+	// bekaeme die Punkte erst hinterher zurueck.
+	MaxPerStream        int `json:"max_per_stream,omitempty"`
+	MaxPerUserPerStream int `json:"max_per_user_per_stream,omitempty"`
+
 	Category string `json:"category"`
 
 	// SCActionMap/SCAction verweisen auf die Aktion in actionmaps.xml,

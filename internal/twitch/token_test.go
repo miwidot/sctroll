@@ -276,7 +276,7 @@ func TestCreateRewardDetectsDuplicate(t *testing.T) {
 	c := testClient(&config.TwitchConfig{AccessToken: "a", RefreshToken: "r",
 		ExpiresAt: time.Now().Add(time.Hour), BroadcasterID: "1"})
 
-	_, err := c.CreateReward("Helm ab!", 500, 60000, "", "")
+	_, err := c.CreateReward(RewardSpec{Title: "Helm ab!", Cost: 500, CooldownMs: 60000})
 	if !errors.Is(err, ErrRewardExists) {
 		t.Fatalf("erwartet ErrRewardExists, bekam %v", err)
 	}
@@ -350,7 +350,7 @@ func TestCreateRewardDetectsChannelLimit(t *testing.T) {
 	c := testClient(&config.TwitchConfig{AccessToken: "a", RefreshToken: "r",
 		ExpiresAt: time.Now().Add(time.Hour), BroadcasterID: "1"})
 
-	_, err := c.CreateReward("Taunt!", 300, 30000, "", "")
+	_, err := c.CreateReward(RewardSpec{Title: "Taunt!", Cost: 300, CooldownMs: 30000})
 	if !errors.Is(err, ErrTooManyRewards) {
 		t.Fatalf("erwartet ErrTooManyRewards, bekam %v", err)
 	}
@@ -392,5 +392,56 @@ func TestTrimPrompt(t *testing.T) {
 	exact := strings.Repeat("ö", PromptLimit)
 	if TrimPrompt(exact) != exact {
 		t.Error("genau erlaubte Länge wurde gekürzt")
+	}
+}
+
+// Die Twitch-API nimmt beim Anlegen und Ändern FLACHE Felder für die Grenzen.
+// Verschachtelt (max_per_stream_setting mit is_enabled) ist ausschließlich die
+// Antwort. Wer die Antwortform zurückschickt, bekommt keinen Fehler -- Twitch
+// ignoriert unbekannte Felder --, und die Grenze wirkt schlicht nie.
+func TestRewardSpecUsesFlatLimitFields(t *testing.T) {
+	f := RewardSpec{Title: "x", Cost: 1, MaxPerStream: 5, MaxPerUserPerStream: 2}.fields()
+
+	for _, nested := range []string{"max_per_stream_setting", "max_per_user_per_stream_setting", "global_cooldown_setting"} {
+		if _, ok := f[nested]; ok {
+			t.Errorf("%q ist die Antwortform und wird von der API ignoriert", nested)
+		}
+	}
+
+	if f["is_max_per_stream_enabled"] != true || f["max_per_stream"] != 5 {
+		t.Errorf("Grenze pro Stream falsch: enabled=%v wert=%v",
+			f["is_max_per_stream_enabled"], f["max_per_stream"])
+	}
+	if f["is_max_per_user_per_stream_enabled"] != true || f["max_per_user_per_stream"] != 2 {
+		t.Errorf("Grenze pro Zuschauer falsch: enabled=%v wert=%v",
+			f["is_max_per_user_per_stream_enabled"], f["max_per_user_per_stream"])
+	}
+}
+
+// Ohne Grenze müssen die Felder trotzdem mit -- sonst ließe sich eine einmal
+// gesetzte Grenze nie wieder entfernen. Twitch verlangt dabei mindestens 1,
+// auch wenn die Grenze abgeschaltet ist.
+func TestRewardSpecSendsDisabledLimits(t *testing.T) {
+	f := RewardSpec{Title: "x", Cost: 1}.fields()
+
+	if f["is_max_per_stream_enabled"] != false || f["is_max_per_user_per_stream_enabled"] != false {
+		t.Error("abgeschaltete Grenzen werden nicht mitgeschickt")
+	}
+	if f["max_per_stream"] != 1 || f["max_per_user_per_stream"] != 1 {
+		t.Errorf("Twitch verlangt mindestens 1: perStream=%v perUser=%v",
+			f["max_per_stream"], f["max_per_user_per_stream"])
+	}
+}
+
+// Twitch zeigt Cooldowns unter 60 Sekunden nicht sinnvoll an und lehnt sie ab.
+func TestRewardSpecRaisesShortCooldown(t *testing.T) {
+	f := RewardSpec{Title: "x", Cost: 1, CooldownMs: 20000}.fields()
+	if f["global_cooldown_seconds"] != 60 {
+		t.Errorf("20s wurden als %v übernommen, Twitch verlangt mindestens 60", f["global_cooldown_seconds"])
+	}
+
+	off := RewardSpec{Title: "x", Cost: 1}.fields()
+	if off["is_global_cooldown_enabled"] != false {
+		t.Error("ohne Cooldown muss das Feld abgeschaltet mitgeschickt werden")
 	}
 }

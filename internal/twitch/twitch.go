@@ -362,36 +362,80 @@ func TrimPrompt(s string) string {
 	return strings.TrimSpace(string(r[:PromptLimit-1])) + "…"
 }
 
-func (c *Client) CreateReward(title string, cost int, cooldownMs int, color, prompt string) (string, error) {
-	debuglog.Log("CreateReward: title=%q cost=%d cooldown=%dms color=%s broadcaster_id=%s", title, cost, cooldownMs, color, c.cfg.BroadcasterID)
-	body := map[string]interface{}{
-		"title":                  title,
-		"cost":                   cost,
-		"is_enabled":             true,
-		"is_user_input_required": false,
-		// Muss false bleiben: mit true gilt eine Einloesung sofort als erledigt
-		// und laesst sich nicht mehr erstatten. Genau das braucht sctroll aber,
-		// wenn das Spiel gerade nicht im Vordergrund ist.
-		// (Der Feldname lautet ...skip_request_queue -- "skip_queue" ignoriert Twitch.)
-		"should_redemptions_skip_request_queue": false,
+// RewardSpec beschreibt eine Kanalpunkt-Belohnung.
+//
+// Als Struktur statt als lange Parameterliste: die Felder wachsen mit jeder
+// Twitch-Einstellung mit, und Anlegen und Aendern sollen dieselbe Abbildung
+// benutzen, damit die beiden nicht auseinanderlaufen.
+type RewardSpec struct {
+	Title      string
+	Cost       int
+	CooldownMs int
+	Color      string
+	Prompt     string
+
+	// Obergrenzen pro Stream. 0 heisst: keine Begrenzung.
+	// Twitch setzt sie selbst durch und blendet die Belohnung fuer betroffene
+	// Zuschauer aus, bevor Punkte abgebucht werden.
+	MaxPerStream        int
+	MaxPerUserPerStream int
+}
+
+// fields baut die Felder fuer die Twitch-API. Wird von Anlegen und Aendern
+// gleichermassen benutzt.
+func (r RewardSpec) fields() map[string]interface{} {
+	f := map[string]interface{}{
+		"title": r.Title,
+		"cost":  r.Cost,
 	}
-	// Twitch requires minimum 60 seconds for global cooldown
-	cooldownSec := cooldownMs / 1000
-	if cooldownSec >= 60 {
-		body["is_global_cooldown_enabled"] = true
-		body["global_cooldown_seconds"] = cooldownSec
-	} else if cooldownSec > 0 {
-		body["is_global_cooldown_enabled"] = true
-		body["global_cooldown_seconds"] = 60
+
+	// Twitch verlangt mindestens 60 Sekunden globalen Cooldown.
+	if sec := r.CooldownMs / 1000; sec > 0 {
+		if sec < 60 {
+			sec = 60
+		}
+		f["is_global_cooldown_enabled"] = true
+		f["global_cooldown_seconds"] = sec
+	} else {
+		f["is_global_cooldown_enabled"] = false
 	}
-	// Set reward color if specified (hex format like #9146FF)
-	if color != "" {
-		body["background_color"] = color
+
+	if r.Color != "" {
+		f["background_color"] = r.Color
 	}
 	// Beschreibung: das ist der Text, den der Zuschauer beim Einloesen sieht.
-	if p := TrimPrompt(prompt); p != "" {
-		body["prompt"] = p
-	}
+	f["prompt"] = TrimPrompt(r.Prompt)
+
+	// Achtung: die Anfrage nimmt FLACHE Felder. Verschachtelt
+	// (max_per_stream_setting mit is_enabled) ist ausschliesslich die Antwort.
+	// Wer die Antwortform zurueckschickt, bekommt keinen Fehler -- Twitch
+	// ignoriert die unbekannten Felder einfach, und die Grenze wirkt nie.
+	//
+	// Beide Grenzen immer mitschicken, auch abgeschaltet, sonst liesse sich eine
+	// einmal gesetzte nie wieder entfernen. Der Wert muss dabei mindestens 1
+	// sein, auch wenn die Grenze aus ist.
+	f["is_max_per_stream_enabled"] = r.MaxPerStream > 0
+	f["max_per_stream"] = max(r.MaxPerStream, 1)
+	f["is_max_per_user_per_stream_enabled"] = r.MaxPerUserPerStream > 0
+	f["max_per_user_per_stream"] = max(r.MaxPerUserPerStream, 1)
+
+	return f
+}
+
+func (c *Client) CreateReward(spec RewardSpec) (string, error) {
+	debuglog.Log("CreateReward: title=%q cost=%d cooldown=%dms perStream=%d perUser=%d broadcaster_id=%s",
+		spec.Title, spec.Cost, spec.CooldownMs, spec.MaxPerStream, spec.MaxPerUserPerStream, c.cfg.BroadcasterID)
+
+	body := spec.fields()
+	body["is_enabled"] = true
+	body["is_user_input_required"] = false
+	// Muss false bleiben: mit true gilt eine Einloesung sofort als erledigt
+	// und laesst sich nicht mehr erstatten. Genau das braucht sctroll aber,
+	// wenn das Spiel gerade nicht im Vordergrund ist.
+	// (Der Feldname lautet ...skip_request_queue -- "skip_queue" ignoriert Twitch.)
+	body["should_redemptions_skip_request_queue"] = false
+
+	title := spec.Title
 	jsonBody, _ := json.Marshal(body)
 
 	resp, err := c.doAuthorized(func() (*http.Request, error) {
@@ -492,6 +536,13 @@ func (c *Client) SetRedemptionStatus(rewardID, redemptionID, status string) erro
 	}
 	debuglog.Log("SetRedemptionStatus: %s -> %s", redemptionID, status)
 	return nil
+}
+
+// UpdateRewardSpec schreibt Titel, Kosten, Beschreibung, Cooldown und die
+// Obergrenzen einer bestehenden Belohnung fort -- dieselbe Abbildung wie beim
+// Anlegen, damit beide nicht auseinanderlaufen.
+func (c *Client) UpdateRewardSpec(rewardID string, spec RewardSpec) error {
+	return c.UpdateReward(rewardID, spec.fields(), "")
 }
 
 func (c *Client) UpdateRewardEnabled(rewardID string, enabled bool, color string) error {

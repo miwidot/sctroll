@@ -209,6 +209,10 @@ sehen — Twitch zeigt sie unter der Belohnung an.
 | Gefährlich | Schleudersitz | `RAlt+Y` | 200 ms |
 | Gefährlich | Selbstzerstörung | `Backspace` | **15 s** |
 
+Pro Aktion lassen sich außerdem **Obergrenzen pro Stream** und **pro Zuschauer und Stream**
+setzen (0 = unbegrenzt). Durchgesetzt werden sie von Twitch: die Belohnung wird ausgeblendet,
+sobald die Grenze erreicht ist — bevor Punkte abgebucht werden.
+
 Eigene Aktionen lassen sich über das **+** anlegen: beliebige Taste, Tastenkombination,
 Maustaste, Wiederholungen oder eine mehrstufige Abfolge. Maustasten zählen wie im Spiel:
 `mouse1` ist links, `mouse2` rechts, `mouse3` die mittlere. Eindeutiger sind `lmouse`,

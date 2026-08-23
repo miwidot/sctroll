@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.0.15
+
+### Optionale Obergrenzen pro Aktion
+
+Zwei neue Felder je Aktion: **maximal pro Stream** und **maximal pro Zuschauer und Stream**.
+Null heißt unbegrenzt, wie bisher.
+
+Durchgesetzt wird das von Twitch selbst, nicht von SCTroll. Das ist der wichtige Unterschied:
+Twitch blendet die Belohnung aus, sobald die Grenze erreicht ist, und zwar **bevor** Punkte
+abgebucht werden. Der Zuschauer sieht die Grenze in der Oberfläche, und ein Neustart von
+SCTroll setzt nichts zurück. Selbst mitzuzählen wäre in jeder Hinsicht schlechter gewesen --
+der Zuschauer hätte bezahlt und die Punkte erst hinterher zurückbekommen.
+
+Die Grenzen pro Stream zählt Twitch ab Beginn der Übertragung; offline greifen sie nicht.
+
+### Reward-Felder an einer Stelle
+
+Anlegen und Ändern einer Belohnung bauten ihre Felder getrennt zusammen und liefen dadurch
+auseinander -- die Beschreibung etwa wurde beim Anlegen anders behandelt als beim Bearbeiten.
+Beides geht jetzt durch dieselbe Abbildung (`RewardSpec`).
+
+Dabei eine Falle aus der Twitch-Dokumentation: **die Anfrage nimmt flache Felder**
+(`is_max_per_stream_enabled`, `max_per_stream`), verschachtelt (`max_per_stream_setting` mit
+`is_enabled`) ist ausschließlich die *Antwort*. Wer die Antwortform zurückschickt, bekommt
+keinen Fehler -- Twitch ignoriert unbekannte Felder --, und die Grenze wirkt schlicht nie. Drei
+Tests halten das fest.
+
 ## 1.0.14
 
 ### Beschreibung für die Zuschauer

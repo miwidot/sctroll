@@ -39,6 +39,8 @@
       key_lock: { enabled: false, keys: [], duration_ms: 0 },
       cooldown_ms: 10000,
       twitch_cooldown_sec: 60,
+      max_per_stream: 0,
+      max_per_user_per_stream: 0,
       reward_color: '#9146FF',
     }
   }
@@ -245,7 +247,15 @@
                   {#if action.steps && action.steps.length > 0}
                     <span>Steps: <em>{action.steps.length}</em></span>
                   {/if}
-                  {#if action.key_lock.enabled}
+                  {#if action.max_per_stream > 0 || action.max_per_user_per_stream > 0}
+            <div class="detail">
+              <span class="detail-label">Limit</span>
+              <span class="detail-value limit-badge">
+                {action.max_per_stream > 0 ? action.max_per_stream + "/Stream" : ""}{action.max_per_stream > 0 && action.max_per_user_per_stream > 0 ? " · " : ""}{action.max_per_user_per_stream > 0 ? action.max_per_user_per_stream + "/Zuschauer" : ""}
+              </span>
+            </div>
+          {/if}
+          {#if action.key_lock.enabled}
                     <span>Lock: <em>{action.key_lock.keys.join(', ').toUpperCase()} ({action.key_lock.duration_ms / 1000}s)</em></span>
                   {/if}
                 </div>
@@ -344,6 +354,14 @@
           <input type="number" min="60" step="1"
             bind:value={editingAction.twitch_cooldown_sec}
             placeholder="60" />
+        </label>
+        <label>
+          <span>Max. pro Stream (0 = unbegrenzt)</span>
+          <input type="number" min="0" step="1" bind:value={editingAction.max_per_stream} placeholder="0" />
+        </label>
+        <label>
+          <span>Max. pro Zuschauer und Stream (0 = unbegrenzt)</span>
+          <input type="number" min="0" step="1" bind:value={editingAction.max_per_user_per_stream} placeholder="0" />
         </label>
         <label>
           <span>{$i18n('actions.category')}</span>
@@ -450,6 +468,14 @@
           <span>Twitch Cooldown (Sek, min 60)</span>
           <input type="number" min="60" step="1"
             bind:value={newAction.twitch_cooldown_sec} />
+        </label>
+        <label>
+          <span>Max. pro Stream (0 = unbegrenzt)</span>
+          <input type="number" min="0" step="1" bind:value={newAction.max_per_stream} placeholder="0" />
+        </label>
+        <label>
+          <span>Max. pro Zuschauer und Stream (0 = unbegrenzt)</span>
+          <input type="number" min="0" step="1" bind:value={newAction.max_per_user_per_stream} placeholder="0" />
         </label>
         <label>
           <span>{$i18n('actions.category')}</span>
@@ -751,6 +777,7 @@
   .cost-value { color: var(--accent); }
   .twitch-cd { color: #9146ff; }
   .lock-detail { width: 100%; }
+  .limit-badge { color: var(--accent); font-size: 12px; font-weight: 600; white-space: nowrap; }
   .lock-badge { color: var(--warning); font-size: 12px; font-weight: 500; }
 
   .card-buttons { display: flex; gap: 6px; }

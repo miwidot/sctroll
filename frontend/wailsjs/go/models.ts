@@ -53,6 +53,8 @@ export namespace config {
 	    key_lock: KeyLockConfig;
 	    cooldown_ms: number;
 	    twitch_cooldown_sec?: number;
+	    max_per_stream?: number;
+	    max_per_user_per_stream?: number;
 	    category: string;
 	    sc_actionmap?: string;
 	    sc_action?: string;
@@ -80,6 +82,8 @@ export namespace config {
 	        this.key_lock = this.convertValues(source["key_lock"], KeyLockConfig);
 	        this.cooldown_ms = source["cooldown_ms"];
 	        this.twitch_cooldown_sec = source["twitch_cooldown_sec"];
+	        this.max_per_stream = source["max_per_stream"];
+	        this.max_per_user_per_stream = source["max_per_user_per_stream"];
 	        this.category = source["category"];
 	        this.sc_actionmap = source["sc_actionmap"];
 	        this.sc_action = source["sc_action"];
