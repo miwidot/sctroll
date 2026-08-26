@@ -227,6 +227,12 @@ func SetMode(mode string) {
 	case ModeScancode, ModeVirtual, ModeBoth:
 		sendMode.Store(mode)
 		debuglog.Log("input: Sendeverfahren = %s", mode)
+	case "":
+		// Nicht gesetzt heisst Voreinstellung, nicht Fehler. Stand vorher als
+		// "unbekanntes Sendeverfahren" in jedem Log und liess eine kaputte
+		// Konfiguration vermuten.
+		sendMode.Store(ModeScancode)
+		debuglog.Log("input: Sendeverfahren = %s (Voreinstellung)", ModeScancode)
 	default:
 		sendMode.Store(ModeScancode)
 		debuglog.Log("input: unbekanntes Sendeverfahren %q, benutze %s", mode, ModeScancode)

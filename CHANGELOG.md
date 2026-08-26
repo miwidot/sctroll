@@ -1,5 +1,44 @@
 # Changelog
 
+## 1.0.16
+
+Aus dem Log eines Nutzers.
+
+### Doppelte Einlösungen führten zur Erstattung trotz ausgeführter Aktion
+
+Twitch stellt Benachrichtigungen **at-least-once** zu — dieselbe Einlösung kann zweimal
+ankommen. In besagtem Log war das bei **20 von 129 Einlösungen** so, also rund jeder siebten,
+über den ganzen Zeitraum verteilt.
+
+Bisher hat SCTroll die zweite Kopie wie eine neue Einlösung behandelt. Die lief dann in den
+Cooldown, den die erste gerade gesetzt hatte, und der Cooldown-Zweig erstattet die Punkte. Die
+Erstattung gewann das Rennen gegen das `FULFILLED` der ersten Kopie, das daraufhin in ein 404
+lief („their statuses weren't marked as UNFULFILLED"). Ergebnis: **Taste gedrückt, Punkte
+zurück** — der Zuschauer bekam die Aktion geschenkt.
+
+Einlösungen werden jetzt entdoppelt. Die Twitch-Dokumentation empfiehlt dafür die `message_id`;
+hier wird stattdessen die **Einlösungs-ID** benutzt. Sie deckt denselben Fall ab und zusätzlich
+den, dass die Nachricht über zwei Anmeldungen hereinkommt — dann hätten die Kopien
+verschiedene `message_id`s, aber dieselbe Einlösung.
+
+Gemerkt wird 15 Minuten lang, begrenzt auf 1024 Einträge; Twitch verwirft ältere Nachrichten
+ohnehin als Replay. Fehlt die Einlösungs-ID, wird ausgeführt statt verworfen — eine
+verschluckte Einlösung wäre der schlimmere Fehler.
+
+### Die EventSub-Verbindung steht jetzt im Log
+
+Verbindungsaufbau, Session-ID, Anmeldung samt Subscription-ID, Reconnect-Aufforderung und
+Verbindungsabbruch werden protokolliert; verworfene Doppelungen mit `message_id` und
+`subscription_id`. Das war der Punkt, an dem die Ursachensuche oben aufhörte: aus dem Log ließ
+sich nicht ablesen, ob die zweite Kopie Twitchs Wiederholung war oder aus einer zweiten
+Anmeldung kam. Beides ist jetzt unterscheidbar.
+
+### Kleinigkeit
+
+`input: unbekanntes Sendeverfahren ""` stand bei jedem Start im Log und ließ eine kaputte
+Konfiguration vermuten. Leer heißt schlicht Voreinstellung.
+
+
 ## 1.0.15
 
 ### Optionale Obergrenzen pro Aktion

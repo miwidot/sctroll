@@ -78,22 +78,25 @@ type DeviceCodeResponse struct {
 }
 
 type Client struct {
-	mu             sync.RWMutex
-	cfg            *config.TwitchConfig
-	clientID       string
-	httpClient     *http.Client
-	ws             *websocket.Conn
-	sessionID      string
-	connected      bool
-	keepalive      time.Duration
-	onRedemption   func(rewardID, redemptionID, userName, rewardTitle string)
-	onConnect      func()
-	onDisconnect   func(err error)
+	mu               sync.RWMutex
+	cfg              *config.TwitchConfig
+	clientID         string
+	httpClient       *http.Client
+	ws               *websocket.Conn
+	sessionID        string
+	connected        bool
+	keepalive        time.Duration
+	onRedemption     func(rewardID, redemptionID, userName, rewardTitle string)
+	onConnect        func()
+	onDisconnect     func(err error)
 	onLog            func(msg string)
 	onTokenRefresh   func()
 	stopCh           chan struct{}
 	stopOnce         sync.Once
 	refresherRunning bool
+
+	// seen merkt sich bereits verarbeitete Einloesungen, siehe dedupe().
+	seen map[string]time.Time
 }
 
 type eventSubMessage struct {
@@ -114,6 +117,7 @@ type welcomePayload struct {
 
 type redemptionPayload struct {
 	Subscription struct {
+		ID   string `json:"id"`
 		Type string `json:"type"`
 	} `json:"subscription"`
 	Event struct {
@@ -649,6 +653,8 @@ func (c *Client) connectTo(wsURL string, subscribe bool) error {
 	c.connected = true
 	c.mu.Unlock()
 
+	debuglog.Log("EventSub: verbunden session=%s keepalive=%ds subscribe=%v",
+		welcome.Session.ID, welcome.Session.Keepalive, subscribe)
 	c.log(fmt.Sprintf("Verbunden (Session %s)", welcome.Session.ID))
 	if subscribe && c.onConnect != nil {
 		c.onConnect()
@@ -690,8 +696,24 @@ func (c *Client) subscribeToRedemptions() error {
 
 	respBody, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != 202 {
+		debuglog.Log("EventSub: Anmeldung fehlgeschlagen status=%d body=%s", resp.StatusCode, string(respBody))
 		return fmt.Errorf("failed to subscribe (status %d): %s", resp.StatusCode, string(respBody))
 	}
+
+	// Die Subscription-ID mitschreiben: taucht spaeter eine Doppelung mit einer
+	// anderen auf, liegt es an einer zweiten Anmeldung und nicht an Twitchs
+	// Wiederholung.
+	var created struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	json.Unmarshal(respBody, &created)
+	subID := ""
+	if len(created.Data) > 0 {
+		subID = created.Data[0].ID
+	}
+	debuglog.Log("EventSub: angemeldet subscription=%s session=%s", subID, c.sessionID)
 
 	c.log("Auf Kanalpunkt-Einlösungen angemeldet")
 	return nil
@@ -704,10 +726,12 @@ func (c *Client) subscribeToRedemptions() error {
 func (c *Client) readLoop(ws *websocket.Conn) {
 	disconnected := func(err error) {
 		c.mu.Lock()
-		if c.ws == ws {
+		current := c.ws == ws
+		if current {
 			c.connected = false
 		}
 		c.mu.Unlock()
+		debuglog.Log("EventSub: Verbindung beendet (aktuell=%v): %v", current, err)
 		if c.onDisconnect != nil {
 			c.onDisconnect(err)
 		}
@@ -738,7 +762,7 @@ func (c *Client) readLoop(ws *websocket.Conn) {
 			// Nichts zu tun -- hat schon die Read-Deadline zurueckgesetzt.
 
 		case "notification":
-			c.handleNotification(msg.Payload)
+			c.handleNotification(msg.Metadata.MessageID, msg.Payload)
 
 		case "session_reconnect":
 			var welcome welcomePayload
@@ -746,6 +770,7 @@ func (c *Client) readLoop(ws *websocket.Conn) {
 				disconnected(fmt.Errorf("reconnect ohne URL"))
 				return
 			}
+			debuglog.Log("EventSub: session_reconnect angefordert")
 			c.log("Twitch bittet um Reconnect...")
 			if err := c.connectTo(welcome.Session.ReconnectURL, false); err != nil {
 				disconnected(fmt.Errorf("reconnect fehlgeschlagen: %w", err))
@@ -762,13 +787,86 @@ func (c *Client) readLoop(ws *websocket.Conn) {
 	}
 }
 
-func (c *Client) handleNotification(payload json.RawMessage) {
+// dedupeWindow ist die Zeitspanne, in der eine schon gesehene Einloesung als
+// Doppelung gilt. Twitch verwirft eine Nachricht, die aelter als 10 Minuten
+// ist, ohnehin als Replay -- laenger zu warten bringt also nichts.
+const dedupeWindow = 15 * time.Minute
+
+// dedupeMax begrenzt die Merkliste. In 15 Minuten kommen selbst bei einem
+// grossen Kanal keine 1024 Einloesungen zusammen; die Schranke ist nur dafuer
+// da, dass eine Fehlfunktion den Speicher nicht volllaufen laesst.
+const dedupeMax = 1024
+
+// dedupe meldet true, wenn diese Einloesung schon verarbeitet wurde.
+//
+// Twitch stellt Benachrichtigungen *at least once* zu: "if Twitch is unsure of
+// whether you received a notification, it'll resend the event, which means you
+// may receive a notification twice". Die Dokumentation empfiehlt, sich dafuer
+// die message_id zu merken.
+//
+// Hier wird stattdessen die Einloesungs-ID benutzt, und zwar bewusst: sie
+// deckt denselben Fall ab (eine Wiederholung betrifft dieselbe Einloesung) und
+// zusaetzlich den Fall, dass die Nachricht ueber zwei Wege hereinkommt -- dann
+// haetten die beiden Kopien verschiedene message_ids, dieselbe Einloesung aber
+// dieselbe ID. Eine Einloesung ist ohnehin genau einmal auszufuehren.
+//
+// Ohne das war die Doppelung teuer: die zweite Kopie lief in den Cooldown der
+// ersten, und der Cooldown-Zweig erstattet die Punkte. Das Rennen gewann die
+// Erstattung, das FULFILLED der ersten Kopie lief in ein 404. Ergebnis: Aktion
+// ausgefuehrt, Punkte trotzdem zurueck.
+func (c *Client) dedupe(redemptionID string) bool {
+	if redemptionID == "" {
+		return false
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	now := time.Now()
+	if c.seen == nil {
+		c.seen = make(map[string]time.Time)
+	}
+	if _, dup := c.seen[redemptionID]; dup {
+		return true
+	}
+
+	// Abgelaufene Eintraege raeumen. Reicht das nicht, muss die Liste hart
+	// gekuerzt werden -- lieber eine Doppelung durchlassen als unbegrenzt
+	// wachsen.
+	if len(c.seen) >= dedupeMax {
+		for id, t := range c.seen {
+			if now.Sub(t) > dedupeWindow {
+				delete(c.seen, id)
+			}
+		}
+		for id := range c.seen {
+			if len(c.seen) < dedupeMax {
+				break
+			}
+			delete(c.seen, id)
+		}
+	}
+
+	c.seen[redemptionID] = now
+	return false
+}
+
+func (c *Client) handleNotification(messageID string, payload json.RawMessage) {
 	var redemption redemptionPayload
 	if err := json.Unmarshal(payload, &redemption); err != nil {
 		return
 	}
 
 	if !strings.Contains(redemption.Subscription.Type, "redemption") {
+		return
+	}
+
+	if c.dedupe(redemption.Event.ID) {
+		// Mit message_id und subscription_id, weil beide zeigen, woher die
+		// zweite Kopie kam: gleiche message_id heisst Wiederholung durch
+		// Twitch, verschiedene subscription_id hiesse doppelte Anmeldung.
+		debuglog.Log("Redemption: Doppelung verworfen redemption=%s message_id=%s subscription=%s",
+			redemption.Event.ID, messageID, redemption.Subscription.ID)
 		return
 	}
 
