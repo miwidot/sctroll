@@ -61,6 +61,7 @@ Zuschauer löst Kanalpunkt-Reward ein
         ▼
 Twitch EventSub (WebSocket)  ──►  SCTroll
         │
+        ├─ Schon verarbeitet?                    ja   ─► verwerfen
         ├─ Ist Star Citizen im Vordergrund?      nein ─► Punkte zurück
         ├─ Läuft ein Cooldown?                   ja   ─► Punkte zurück
         ├─ Ist die Aktion aktiv?                 nein ─► Punkte zurück
@@ -81,6 +82,11 @@ gemeldet. Passt sie zu einer konfigurierten Aktion, wird die zugehörige Taste p
 
 Alle Tastendrücke laufen durch **eine** Warteschlange. Ohne das würden sich zwei gleichzeitige
 Einlösungen überlappen und bei langen Haltezeiten eine Taste hängen lassen.
+
+Der erste Schritt im Ablauf ist der unscheinbarste und war der teuerste: Twitch stellt
+Benachrichtigungen **at-least-once** zu, dieselbe Einlösung kann also zweimal ankommen.
+Warum das mehr kostet als einen doppelten Tastendruck, steht unter
+[Doppelte Einlösungen](#doppelte-einlösungen).
 
 ---
 
@@ -257,6 +263,8 @@ sich von Hand von der Releases-Seite holen.
 - **Tastensperre**: Blockiert per Low-Level-Hook optional Tasten, während eine Aktion läuft,
   damit eine physisch gehaltene Taste sie nicht überschreibt.
 - **Warteschlange**: Aktionen laufen seriell, nichts überlappt.
+- **Entdopplung**: Stellt Twitch dieselbe Einlösung zweimal zu, wird sie einmal ausgeführt und
+  einmal abgerechnet — siehe [Doppelte Einlösungen](#doppelte-einlösungen).
 
 ---
 
@@ -285,6 +293,20 @@ sendKey[scancode]: BLOCKIERT vk=0x4C scan=0x26 ext=false down ret=0 err=...
 - **`ok`, aber im Spiel passiert nichts** → anderes Sendeverfahren probieren.
 - Hilft beides nicht, greift vermutlich das Anti-Cheat. Dann führt nur ein Hardware-Weg zum
   Ziel — ein USB-HID-Gerät, wie es [ControlPlay](https://controlplay.app) benutzt.
+
+Kommt gar keine Einlösung an, liegt es an der Verbindung statt am Tastendruck. Dafür steht die
+EventSub-Seite ebenfalls im Log:
+
+```
+EventSub: verbunden session=AgoQ... keepalive=10s subscribe=true
+EventSub: angemeldet subscription=f1a2... session=AgoQ...
+EventSub: Doppelung verworfen redemption=669fefd8 message_id=... subscription=f1a2...
+EventSub: Verbindung beendet (aktuell=true): ...
+```
+
+Die Angaben bei einer verworfenen Doppelung sagen, woher die zweite Kopie kam: **gleiche
+`message_id`** heißt Wiederholung durch Twitch, **verschiedene `subscription`** hieße eine
+doppelte Anmeldung.
 
 ---
 
@@ -334,6 +356,36 @@ Die Anmeldung überlebt Neustarts:
 
 Rewards, die SCTroll anlegt, haben `should_redemptions_skip_request_queue: false` — sonst
 gilt eine Einlösung sofort als erledigt und ließe sich nicht mehr erstatten.
+
+### Doppelte Einlösungen
+
+Twitch garantiert **at-least-once**, nicht exactly-once: „if Twitch is unsure of whether you
+received a notification, it'll resend the event". Im Log eines Nutzers betraf das **20 von 129
+Einlösungen** — rund jede siebte.
+
+Der Schaden lag nicht beim doppelten Tastendruck, sondern eine Ebene weiter. Die zweite Kopie
+lief in den Cooldown, den die erste gerade gesetzt hatte. Und ein Cooldown ist ein
+Erstattungsgrund:
+
+```
+23:59:06.055  Execute: scan_mode queued          ← erste Kopie
+23:59:06.057  Redemption: ... 669fefd8 ...       ← zweite Kopie, 2 ms später
+23:59:06.061  execute error: action on cooldown  ← Erstattung angestoßen
+23:59:06.394  SetRedemptionStatus: status=404    ← das FULFILLED der ersten
+23:59:06.456  SetRedemptionStatus: → CANCELED    ← Erstattung gewinnt das Rennen
+```
+
+Ergebnis: **Taste gedrückt, Punkte zurück.** Der Zuschauer bekam die Aktion geschenkt.
+
+Entdoppelt wird über die **Einlösungs-ID**, nicht über die `message_id`, die die
+[Twitch-Dokumentation](https://dev.twitch.tv/docs/eventsub/) dafür vorschlägt. Beide fangen
+Twitchs Wiederholung ab; die Einlösungs-ID fängt zusätzlich den Fall ab, dass dieselbe
+Einlösung über zwei Anmeldungen hereinkommt — dann tragen die Kopien verschiedene
+`message_id`s, aber dieselbe Einlösung.
+
+Gemerkt wird 15 Minuten lang, gedeckelt auf 1024 Einträge; ältere Nachrichten verwirft Twitch
+ohnehin als Replay. Fehlt die Einlösungs-ID, wird ausgeführt statt verworfen — eine
+verschluckte Einlösung wäre der schlimmere Fehler.
 
 Eine eigene Client-ID lässt sich in `%APPDATA%\SCTroll\config.json` unter `twitch.client_id`
 setzen.
@@ -395,7 +447,7 @@ verändert. Abgedeckt sind unter anderem:
 | `internal/starcitizen/actionmaps.go` | `actionmaps.xml` lesen (eigene Belegungen) |
 | `internal/starcitizen/defaultprofile.go` | eingebettete `defaultProfile.xml`, Haltezeiten |
 | `internal/starcitizen/process.go` | läuft das Spiel gerade? |
-| `internal/twitch/twitch.go` | Device Code Flow, Token-Verwaltung, EventSub, Rewards, Erstattungen |
+| `internal/twitch/twitch.go` | Device Code Flow, Token-Verwaltung, EventSub, Entdopplung, Rewards, Erstattungen |
 | `internal/actions/executor.go` | Cooldowns, Warteschlange, Fenster-Prüfung, Ausführung |
 | `internal/input/input.go` | `SendInput`, Sendeverfahren, Tastennamen |
 | `internal/updater/` | Update-Prüfung, Download, Signaturprüfung, Austausch |
