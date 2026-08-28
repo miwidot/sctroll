@@ -97,6 +97,12 @@ type Client struct {
 
 	// seen merkt sich bereits verarbeitete Einloesungen, siehe dedupe().
 	seen map[string]time.Time
+
+	// closing unterscheidet das planmaessige Beenden vom Verbindungsabbruch.
+	// Beide enden im Read-Loop mit demselben "use of closed network
+	// connection" -- ohne die Unterscheidung steht am Ende jedes sauberen
+	// Programmendes eine Zeile im Log, die nach Fehler aussieht.
+	closing bool
 }
 
 type eventSubMessage struct {
@@ -641,6 +647,11 @@ func (c *Client) connectTo(wsURL string, subscribe bool) error {
 	}
 	c.mu.Unlock()
 
+	// Vor dem Anmelden protokollieren, sonst steht die Anmeldung im Log ueber
+	// der Verbindung, zu der sie gehoert.
+	debuglog.Log("EventSub: verbunden session=%s keepalive=%ds subscribe=%v",
+		welcome.Session.ID, welcome.Session.Keepalive, subscribe)
+
 	if subscribe {
 		if err := c.subscribeToRedemptions(); err != nil {
 			ws.Close()
@@ -651,10 +662,9 @@ func (c *Client) connectTo(wsURL string, subscribe bool) error {
 	c.mu.Lock()
 	c.ws = ws
 	c.connected = true
+	c.closing = false
 	c.mu.Unlock()
 
-	debuglog.Log("EventSub: verbunden session=%s keepalive=%ds subscribe=%v",
-		welcome.Session.ID, welcome.Session.Keepalive, subscribe)
 	c.log(fmt.Sprintf("Verbunden (Session %s)", welcome.Session.ID))
 	if subscribe && c.onConnect != nil {
 		c.onConnect()
@@ -730,8 +740,19 @@ func (c *Client) readLoop(ws *websocket.Conn) {
 		if current {
 			c.connected = false
 		}
+		closing := c.closing
 		c.mu.Unlock()
-		debuglog.Log("EventSub: Verbindung beendet (aktuell=%v): %v", current, err)
+
+		switch {
+		case closing:
+			debuglog.Log("EventSub: Verbindung planmäßig geschlossen")
+		case !current:
+			// Die abgeloeste Verbindung nach einem Reconnect. Laeuft alles
+			// richtig, ist das der Normalfall und kein Abbruch.
+			debuglog.Log("EventSub: abgelöste Verbindung geschlossen: %v", err)
+		default:
+			debuglog.Log("EventSub: Verbindung abgebrochen: %v", err)
+		}
 		if c.onDisconnect != nil {
 			c.onDisconnect(err)
 		}
@@ -885,6 +906,7 @@ func (c *Client) Disconnect() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.connected = false
+	c.closing = true
 	if c.ws != nil {
 		c.ws.Close()
 		c.ws = nil
