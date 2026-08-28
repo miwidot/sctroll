@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.0.17
+
+Aus dem ersten echten Lauf mit der neuen EventSub-Protokollierung. Zwei Schönheitsfehler darin,
+sonst nichts — 18 Einlösungen, keine Erstattung, kein Fehler, keine Doppelung.
+
+### Das Log liest sich wieder richtig
+
+Die Anmeldung stand über der Verbindung, zu der sie gehört: `EventSub: angemeldet` wurde
+geschrieben, bevor `EventSub: verbunden` an der Reihe war.
+
+Und jedes saubere Beenden hinterließ eine Zeile, die nach einem Fehler aussah:
+
+```
+EventSub: Verbindung beendet (aktuell=false): read tcp ...: use of closed network connection
+```
+
+Das ist nur der Read-Loop, der bemerkt, dass das Programm den Socket selbst geschlossen hat.
+Unterschieden wird jetzt zwischen **planmäßigem Schließen**, der nach einem Reconnect
+**abgelösten** Verbindung und einem echten **Abbruch**. Eine Zeile, die bei jedem Beenden nach
+Fehler aussieht, macht die nächste Fehlersuche schwerer statt leichter — und genau dafür ist
+diese Protokollierung da.
+
+
 ## 1.0.16
 
 Aus dem Log eines Nutzers.

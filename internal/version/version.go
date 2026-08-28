@@ -8,7 +8,7 @@ import (
 
 // Current ist die Version dieses Builds. Muss zur productVersion in wails.json
 // und zum Release-Tag auf GitHub passen -- ein Test wacht darueber.
-const Current = "1.0.16"
+const Current = "1.0.17"
 
 // Repo ist das GitHub-Repository, in dem nach neuen Versionen gesucht wird.
 const Repo = "miwidot/sctroll"
